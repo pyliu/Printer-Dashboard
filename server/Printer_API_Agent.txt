@@ -1,0 +1,32 @@
+﻿C:\scripts\Printer_API_Agent.ps1
+
+建立基本工作排程，執行者 SYSTEM，不論是否登入都要執行，系統啟動時
+
+執行程式
+C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe
+
+參數
+-ExecutionPolicy Bypass -File "C:\script\Printer_API_Agent.ps1"
+
+要注意修改 Foxit PDF Reader 路徑
+
+👉 CMD基本測試
+
+:: 請將 IP 修改為您的伺服器 IP (或 localhost)
+
+set SERVER_IP=220.1.34.78
+set API_KEY=YourSecretApiKey123
+
+
+:: 查詢特定印表機狀態
+:: (注意：印表機名稱若有空格，請務必使用雙引號包覆 URL，並將空格改為 %20)
+
+curl -v -H "X-API-KEY: %API_KEY%" "http://%SERVER_IP%:8888/printer/status?name=FX(C5570)-13-207"
+
+:: 注意 @ 符號，這代表上傳檔案內容
+:: duplex 參數：
+::    duplex=1 或 long：雙面列印（長邊翻頁）。
+::    duplex=2 或 short：雙面列印（短邊翻頁）。
+::    duplex=0 或 off：單面列印。
+
+curl -v -X POST -H "X-API-KEY: %API_KEY%" --data-binary "@r:\exchange\@TBD\Printer_API_Agent_API測試指令集.pdf" "http://%SERVER_IP%:8888/printer/print-pdf?name=FX(C5570)-13-207&duplex=0"
