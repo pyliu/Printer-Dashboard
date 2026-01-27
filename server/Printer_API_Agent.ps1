@@ -1,15 +1,14 @@
 <#
 .SYNOPSIS
     資深系統整合工程師實作版本 - Print Server HTTP API & Proactive Monitor
-    版本：v16.0 (UTF-8 Encoding Fix for Legacy Server)
+    版本：v16.6 (Script Self-Restart API)
     修正：
-    1. 解決 BIG5 系統下的中文亂碼問題：新增 Get-Utf8QueryParam 函數。
-    2. 強制對 URL 參數進行 UTF-8 解碼，確保印表機名稱 (如 "EPSON(中文)") 能被正確識別。
-    3. 維持 v15.4 的排程自癒、API 訊息優化、PDF 上傳與完整監控功能。
-    4. 完全相容 PowerShell 2.0 (Windows Server 2008 SP2) 至 2019。
+    1. 新增 /server/restart-script 接口：允許透過 API 觸發腳本自我重啟 (釋放 Port -> 啟動新實例 -> 關閉舊實例)。
+    2. 維持 v16.5 的所有設定：清空預設頻道、07:30 排程自癒。
+    3. 完全相容 PowerShell 2.0 (Windows Server 2008 SP2) 至 2019。
 .NOTES
-    ?? 測試指令
-    curl -H "X-API-KEY: %API_KEY%" "http://%SERVER_IP%:8888/printer/status?name=EPSON%20%E6%B8%AC%E8%A9%A6"
+    ?? 重啟腳本測試指令
+    curl -H "X-API-KEY: %API_KEY%" http://%SERVER_IP%:8888/server/restart-script
 #>
 
 # -------------------------------------------------------------------------
@@ -23,7 +22,7 @@ $maxLogSizeBytes    = 10MB
 $maxHistory         = 5                          
 $logRetentionDays   = 7                   
 
-# --- PDF 閱讀器路徑清單 ---
+# --- PDF 閱讀器路徑 ---
 $pdfReaderPaths     = @(
     "C:\Program Files (x86)\Foxit Software\Foxit PDF Reader\FoxitPDFReader.exe",
     "C:\Program Files\Foxit Software\Foxit PDF Reader\FoxitPDFReader.exe",
@@ -32,10 +31,15 @@ $pdfReaderPaths     = @(
     "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe"
 )
 
+# --- 通知伺服器設定 ---
 $notifyIp           = "220.1.34.75"
 $notifyEndpoint     = "/api/notification_json_api.php"
 $notifyUrl          = "http://$notifyIp$notifyEndpoint"
-$notifyChannels     = @("HA10013859")
+$notifyChannels     = @()                     # 預設不發送給特定頻道
+
+# [設定] 通知伺服器健康檢查
+$enableNotifyHealthCheck = $true      # 開關：是否在啟動時檢查伺服器存活
+$notifyTimeoutMs         = 1000       # 逾時：啟動偵測的 Ping 等待時間
 
 # --- 監控時段與頻率 ---
 $checkIntervalSec   = 60                  
@@ -52,7 +56,7 @@ $maxStuckPrinters   = 3
 
 # --- 排程深度自癒設定 (Cron) ---
 $enableScheduledHeal = $true
-$scheduledHealCron   = "30 7,18 * * *"
+$scheduledHealCron   = "30 7 * * *"       # 每天早上 07:30 執行
 
 # --- 佇列監控設定 ---
 $queueThreshold     = 20                  
@@ -74,6 +78,7 @@ $global:LastQueueCount      = New-Object System.Collections.Hashtable
 $global:IsFirstRun          = $true
 $global:ValidPdfReader      = $null
 $global:LastCronRunTime     = $null 
+$global:IsNotifyServerOnline = $true 
 
 # -------------------------------------------------------------------------
 # 2. 核心函數庫
@@ -155,6 +160,17 @@ function Cleanup-OldLogs {
 
 function Send-SysAdminNotify {
     param([Parameter(Mandatory=$true)][string]$content, [string]$title = "印表機系統通知")
+    
+    # --- 檢查頻道是否為空 ---
+    if ($null -eq $notifyChannels -or $notifyChannels.Count -eq 0) {
+        return
+    }
+
+    # --- 檢查全域旗標 ---
+    if ($enableNotifyHealthCheck -and (-not $global:IsNotifyServerOnline)) {
+        return
+    }
+
     try {
         $localIp = "127.0.0.1"
         try {
@@ -166,7 +182,9 @@ function Send-SysAdminNotify {
         $fields = @{ "type"="add_notification"; "title"=$title; "content"=$content; "priority"="3"; "sender"="$($env:COMPUTERNAME) ($localIp)"; "from_ip"=$localIp }
         $encodedParts = New-Object System.Collections.Generic.List[string]
         foreach ($key in $fields.Keys) { $encodedParts.Add("$key=$([System.Uri]::EscapeDataString($fields[$key]))") }
-        if ($null -ne $notifyChannels) { foreach ($chan in $notifyChannels) { $encodedParts.Add("channels[]=$([System.Uri]::EscapeDataString($chan))") } }
+        # 此時 $notifyChannels 確定不為空
+        foreach ($chan in $notifyChannels) { $encodedParts.Add("channels[]=$([System.Uri]::EscapeDataString($chan))") }
+        
         $postBody = [string]::Join("&", $encodedParts)
         
         Write-ApiLog ">>> [準備發送通知] 標題: $title"
@@ -231,8 +249,16 @@ function Test-CronMatch {
         }
         return [int]$pattern -eq $value
     }
-    
     return (Check-Field $min $curMin) -and (Check-Field $hour $curHour) -and (Check-Field $dom $curDom) -and (Check-Field $month $curMonth) -and (Check-Field $dow $curDow)
+}
+
+function Get-Utf8QueryParam {
+    param($request, $key)
+    $query = $request.Url.Query
+    if ($query -match "[?&]$key=([^&]*)") {
+        return [System.Uri]::UnescapeDataString($matches[1])
+    }
+    return $null
 }
 
 function Get-PrinterStatusData {
@@ -277,8 +303,14 @@ function Get-PrinterStatusData {
             $finalStatus = "Offline" 
         } else {
             switch ($p.PrinterStatus) {
-                1 { $finalStatus = "Error"; $errDetails = "未知 - 可能原因: 驅動限制/SNMP受阻/特殊硬體狀態" }
-                2 { $finalStatus = "Error"; $errDetails = "其他 - 請檢查設備面板" }
+                1 { 
+                    $finalStatus = "Error"
+                    $errDetails = "未知 - 可能原因: 驅動限制/SNMP受阻/特殊硬體狀態"
+                }
+                2 { 
+                    $finalStatus = "Error"
+                    $errDetails = "其他 - 請檢查設備面板"
+                }
                 4 { $finalStatus = "Printing" }
                 5 { $finalStatus = "Warmup" }
                 default { 
@@ -325,19 +357,6 @@ function Get-PrinterStatusData {
         $results.Add($obj)
     }
     return $results
-}
-
-# --- [新增] UTF-8 參數讀取函數 ---
-# 解決 legacy system (BIG5) 下解析 UTF-8 URL encoded string 的亂碼問題
-function Get-Utf8QueryParam {
-    param($request, $key)
-    # 直接讀取 Raw Query
-    $query = $request.Url.Query
-    if ($query -match "[?&]$key=([^&]*)") {
-        # 使用標準 UnescapeDataString (支援 UTF-8)
-        return [System.Uri]::UnescapeDataString($matches[1])
-    }
-    return $null
 }
 
 function Test-PrinterHealth {
@@ -402,11 +421,30 @@ if ($null -eq $global:ValidPdfReader) {
     Write-ApiLog "[系統初始化] 警告: 未偵測到指定清單中的閱讀器，後續列印將降級使用系統預設關聯。"
 }
 
+# --- 啟動時偵測通知伺服器 ---
+Write-ApiLog "--- 系統初始化: 偵測通知伺服器狀態 ---"
+if ($enableNotifyHealthCheck) {
+    $pinger = New-Object System.Net.NetworkInformation.Ping
+    try {
+        $reply = $pinger.Send($notifyIp, $notifyTimeoutMs)
+        if ($reply.Status -ne "Success") {
+            $global:IsNotifyServerOnline = $false
+            Write-ApiLog "[系統初始化] 警告: 通知伺服器 $notifyIp 無回應 (Status: $($reply.Status))。本次運行將停用所有通知。"
+        } else {
+            Write-ApiLog "[系統初始化] 通知伺服器連線正常。"
+        }
+    } catch {
+        $global:IsNotifyServerOnline = $false
+        Write-ApiLog "[系統初始化] 警告: 通知伺服器偵測失敗: $($_.Exception.Message)。本次運行將停用所有通知。"
+    }
+}
+
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://*:$port/")
-try { $listener.Start(); Write-ApiLog "--- 伺服器 v16.0 上線 (UTF-8 編碼強制修復版) ---" } catch { exit }
+try { $listener.Start(); Write-ApiLog "--- 伺服器 v16.6 上線 (重啟腳本功能已啟用) ---" } catch { exit }
 
 $nextCheck = Get-Date; $nextHeart = Get-Date; $contextTask = $null
+$restartScript = $false
 
 while ($listener.IsListening) {
     try {
@@ -422,7 +460,7 @@ while ($listener.IsListening) {
             $nextCheck = $now.AddSeconds($checkIntervalSec)
         }
 
-        # --- Cron 排程深度自癒 ---
+        # Cron 排程深度自癒
         if ($enableScheduledHeal) {
             if ($global:LastCronRunTime -eq $null -or ($now.Minute -ne $global:LastCronRunTime.Minute -or $now.Hour -ne $global:LastCronRunTime.Hour)) {
                 if (Test-CronMatch $scheduledHealCron $now) {
@@ -460,20 +498,27 @@ while ($listener.IsListening) {
             elseif ($path -eq "/server/logs") {
                 $todayLog = Join-Path $logPath "PrintApi_$(Get-Date -Format 'yyyy-MM-dd').log"
                 if (Test-Path $todayLog) {
-                    $linesReq = Get-Utf8QueryParam $request "lines" # [修正]
+                    $linesReq = Get-Utf8QueryParam $request "lines" 
                     $count = 100
                     if ($null -ne $linesReq -and $linesReq -match "^\d+$") { $count = [int]$linesReq }
                     $logContent = Get-Content $todayLog | Select-Object -Last $count
                     $res.data = $logContent; $res.success = $true; $res.message = "已讀取最後 $count 行日誌"
                 } else { $res.message = "今日尚無日誌檔案" }
             }
+            elseif ($path -eq "/server/restart-script") {
+                # --- [新增] 自我重啟接口 ---
+                $res.success = $true
+                $res.message = "API 伺服器正在重新啟動中..."
+                Write-ApiLog ">>> [系統操作] 收到重啟指令 (Restart Script)"
+                $restartScript = $true
+            }
             elseif ($path -eq "/printer/print-pdf") {
                 if ($request.HttpMethod -eq "POST") {
-                    $pName = Get-Utf8QueryParam $request "name" # [修正]
+                    $pName = Get-Utf8QueryParam $request "name" 
                     $pObj = Get-WmiObject Win32_Printer | Where-Object { $_.Name -eq $pName }
                     
                     if ($null -ne $pObj) {
-                        $duplexReq = Get-Utf8QueryParam $request "duplex" # [修正]
+                        $duplexReq = Get-Utf8QueryParam $request "duplex" 
                         $restoreDuplex = $false; $oldDuplexMode = $null
                         
                         if ($null -ne $duplexReq) {
@@ -534,7 +579,7 @@ while ($listener.IsListening) {
                 } else { $res.message = "僅支援 POST 方法" }
             }
             elseif ($path -eq "/printer/status") {
-                $pName = Get-Utf8QueryParam $request "name" # [修正]
+                $pName = Get-Utf8QueryParam $request "name" 
                 $all = Get-PrinterStatusData
                 $target = $null
                 foreach($item in $all) { if($item.Name -eq $pName) { $target = $item; break } }
@@ -545,7 +590,7 @@ while ($listener.IsListening) {
                 else { $res.message = "找不到指定的印表機" }
             }
             elseif ($path -eq "/printer/refresh") {
-                $pName = Get-Utf8QueryParam $request "name" # [修正]
+                $pName = Get-Utf8QueryParam $request "name" 
                 $pObj = Get-WmiObject -Class Win32_Printer | Where-Object { $_.Name -eq $pName }
                 if ($null -ne $pObj) {
                     $pObj.Pause(); Start-Sleep -Milliseconds 500; $pObj.Resume()
@@ -555,7 +600,7 @@ while ($listener.IsListening) {
                 } else { $res.message = "找不到指定的印表機" }
             }
             elseif ($path -eq "/printer/clear") {
-                $pName = Get-Utf8QueryParam $request "name" # [修正]
+                $pName = Get-Utf8QueryParam $request "name" 
                 $jobs = Get-WmiObject Win32_PrintJob | Where-Object { $_.Name -like "*$pName*" }
                 if ($jobs) { foreach($j in $jobs){$j.Delete()} }
                 $res.success = $true
@@ -590,6 +635,15 @@ while ($listener.IsListening) {
             Write-ApiLog "<<< [完成] $clientIP 的請求處理週期結束。"
         } catch {
             Write-ApiLog ">>> [連線中斷] 客戶端 $clientIP 在回應傳輸前斷開 ($($_.Exception.Message))"
+        }
+
+        # --- [執行重啟] ---
+        if ($restartScript) {
+            Write-ApiLog ">>> [系統重啟] 正在釋放資源並啟動新程序..."
+            try { $listener.Stop(); $listener.Close() } catch {}
+            $myself = $MyInvocation.MyCommand.Definition
+            Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$myself`"" -WindowStyle Hidden
+            exit
         }
 
     } catch { 

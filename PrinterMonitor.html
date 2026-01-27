@@ -54,7 +54,7 @@
                     </div>
                     <div>
                         <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v1.5 (Dark Mode)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v1.6 (Offline)</p>
                     </div>
                 </div>
 
@@ -117,6 +117,14 @@
                                 <i class="fa-solid fa-suitcase-medical text-slate-400 group-hover:text-red-500"></i>
                             </div>
                             <p class="text-xs text-slate-400 mt-1">清空暫存並重置環境</p>
+                        </button>
+
+                         <button @click="restartScript" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-500 transition-all group">
+                            <div class="flex items-center justify-between">
+                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400">重啟 API 服務</span>
+                                <i class="fa-solid fa-power-off text-slate-400 group-hover:text-purple-500"></i>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">重新載入 PowerShell 腳本</p>
                         </button>
 
                         <button @click="showLogs" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-500 transition-all group">
@@ -224,6 +232,7 @@
                             <!-- 資訊欄 -->
                             <div class="grid grid-cols-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400 mb-4 border-t border-slate-100 dark:border-slate-700 pt-2">
                                 <div v-if="p.Location" class="truncate" :title="p.Location"><i class="fa-solid fa-location-dot w-4"></i> {{ p.Location }}</div>
+                                <div v-if="p.ShareName" class="truncate" :title="p.ShareName"><i class="fa-solid fa-share-nodes w-4"></i> {{ p.ShareName }}</div>
                                 <div v-if="p.Driver" class="truncate col-span-2" :title="p.Driver"><i class="fa-solid fa-microchip w-4"></i> {{ p.Driver }}</div>
                                 <div v-if="p.PortName" class="truncate"><i class="fa-solid fa-plug w-4"></i> {{ p.PortName }}</div>
                             </div>
@@ -349,7 +358,7 @@
                 const loading = ref(false);
                 const lastUpdated = ref('');
                 const searchQuery = ref('');
-                const filterStatus = ref(''); // 預設全部
+                const filterStatus = ref('');
                 
                 // PDF Modal
                 const showPdfModal = ref(false);
@@ -365,12 +374,13 @@
 
                 let pollTimer = null;
 
-                // 監聽並儲存設定
+                // 儲存設定 (IP, Key)
                 watch(config, (newVal) => {
                     localStorage.setItem('ps_server_ip', newVal.ip);
                     localStorage.setItem('ps_api_key', newVal.key);
                 }, { deep: true });
 
+                // 儲存設定 (AutoRefresh) 並觸發輪詢
                 watch(autoRefresh, (newVal) => {
                     localStorage.setItem('ps_auto_refresh', newVal);
                     if (newVal) {
@@ -432,7 +442,7 @@
                     }
                 };
 
-                // 篩選邏輯 (支援 Ready, Issue, Error, Warning)
+                // 篩選邏輯
                 const filteredPrinters = computed(() => {
                     return printers.value.filter(p => {
                         const matchQuery = 
@@ -497,6 +507,23 @@
                 const selfHeal = async () => {
                     if (!confirm("危險操作：深度自癒將刪除所有暫存檔並強制重啟服務。請確認目前無重要列印工作中。")) return;
                     await performAction(`/service/self-heal`, "深度自癒流程已啟動");
+                };
+
+                // [新增] 重啟 API 腳本
+                const restartScript = async () => {
+                     if (!confirm("確定要重啟 API 監控服務嗎？(連線將會短暫中斷)")) return;
+                     // 這裡不需要 performAction 因為重啟後無法馬上得到 response
+                     loading.value = true;
+                     try {
+                        // 使用 fetch 送出請求後不等回應 (因為服務會斷線)
+                        axios.get(getApiUrl('/server/restart-script'), { headers: { 'X-API-KEY': config.value.key } }).catch(() => {});
+                        success("重啟指令已發送，請稍候...");
+                        setTimeout(() => fetchPrinters(), 5000); // 5秒後重試連線
+                     } catch(e) {
+                         // ignore
+                     } finally {
+                         loading.value = false;
+                     }
                 };
 
                 const openPdfModal = (printer) => {
@@ -573,9 +600,11 @@
                 const success = (text) => toast(text, "#10b981");
                 const error = (text) => toast(text, "#ef4444");
 
+                // Init
                 onMounted(() => {
                     if (config.value.ip && config.value.key) {
                         fetchPrinters();
+                        // 若有記憶開啟，則自動啟動
                         if (autoRefresh.value) {
                             startPolling();
                         }
@@ -587,7 +616,7 @@
                     searchQuery, filterStatus, filteredPrinters, errorCount,
                     getStatusColor, toggleDarkMode,
                     fetchPrinters, 
-                    clearQueue, refreshPrinter, restartSpooler, selfHeal,
+                    clearQueue, refreshPrinter, restartSpooler, selfHeal, restartScript, // <--- 已補上
                     showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput, openPdfModal, submitPdf,
                     showLogModal, logData, logsLoading, showLogs, fetchLogs
                 };
