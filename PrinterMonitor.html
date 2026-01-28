@@ -10,7 +10,7 @@
     <script src="offline/tailwind.js"></script>
     <script src="offline/bundle.js"></script>
 
-    <!-- Tailwind 設定：啟用 class 模式的 Dark Mode -->
+    <!-- Tailwind 設定 -->
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -18,7 +18,7 @@
                 extend: {
                     colors: {
                         slate: {
-                            850: '#1e293b', 
+                            850: '#1e293b',
                             950: '#0f172a'
                         }
                     }
@@ -29,10 +29,28 @@
 
     <style>
         [v-cloak] { display: none !important; }
+        
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
+        
         #init-loading { transition: opacity 0.5s ease-out; }
         .fade-out { opacity: 0; pointer-events: none; }
+        
+        /* [修正] 列表過渡動畫設定為 1s (慢速) */
+        .list-move, 
+        .list-enter-active,
+        .list-leave-active {
+            transition: all 1s cubic-bezier(0.55, 0, 0.1, 1);
+        }
+        .list-enter-from,
+        .list-leave-to {
+            opacity: 0;
+            transform: scale(0.95) translateY(10px);
+        }
+        .list-leave-active {
+            position: absolute;
+            width: 100%; /* 避免 Grid 布局在移除時跳動 */
+        }
         
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -67,11 +85,11 @@
                     </div>
                     <div>
                         <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v3.0 (Multi-Server)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v3.3 (Full Integrated)</p>
                     </div>
                 </div>
 
-                <!-- 連線設定區 (改版：下拉選單 + 管理按鈕) -->
+                <!-- 連線設定區 -->
                 <div class="flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
                     
                     <button @click="toggleDarkMode" class="w-8 h-8 rounded-full bg-white dark:bg-slate-700 text-slate-600 dark:text-yellow-400 shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-600 transition-all mr-2" :title="darkMode ? '切換為亮色' : '切換為深色'">
@@ -83,7 +101,7 @@
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <i class="fa-solid fa-server text-slate-400"></i>
                         </div>
-                        <select v-model="currentServerId" @change="switchServer" class="pl-9 pr-8 py-1.5 text-sm rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 w-56 transition-colors appearance-none cursor-pointer">
+                        <select v-model="currentServerId" @change="switchServer" class="pl-9 pr-8 py-1.5 text-sm rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 w-48 transition-colors appearance-none cursor-pointer">
                             <option value="" disabled>請選擇伺服器</option>
                             <option v-for="srv in servers" :key="srv.id" :value="srv.id">
                                 {{ srv.name }} ({{ srv.ip }})
@@ -94,7 +112,6 @@
                         </div>
                     </div>
 
-                    <!-- 伺服器管理按鈕 -->
                     <button @click="openServerManager" class="bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded text-sm font-medium transition-colors" title="管理伺服器列表">
                         <i class="fa-solid fa-gear"></i>
                     </button>
@@ -105,12 +122,18 @@
                         <span class="hidden sm:inline">連線</span>
                     </button>
                     
-                    <div class="flex items-center ml-2 border-l border-slate-300 dark:border-slate-600 pl-3">
-                        <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" v-model="autoRefresh" :disabled="!currentServerId" class="sr-only peer">
+                    <!-- [修正] 自動更新設定區塊 (含秒數輸入) -->
+                    <div class="flex items-center ml-2 border-l border-slate-300 dark:border-slate-600 pl-3 gap-2">
+                        <label class="inline-flex items-center cursor-pointer" title="開啟自動更新">
+                            <input type="checkbox" v-model="autoRefresh" :disabled="!isConfigValid" class="sr-only peer">
                             <div class="relative w-9 h-5 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
-                            <span class="ms-2 text-xs font-medium text-gray-700 dark:text-slate-300" :class="{'opacity-50': !currentServerId}">自動</span>
                         </label>
+                        <div v-if="autoRefresh" class="flex items-center transition-all animate-fade-in-right">
+                            <!-- 秒數輸入框 -->
+                            <input type="number" v-model.lazy="refreshInterval" @change="validateInterval" min="60" class="w-14 px-1 py-0.5 text-xs text-center border rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none" title="更新間隔 (秒)">
+                            <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">秒</span>
+                        </div>
+                        <span v-else class="text-xs font-medium text-gray-700 dark:text-slate-300" :class="{'opacity-50': !isConfigValid}">自動</span>
                     </div>
                 </div>
             </div>
@@ -171,8 +194,7 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- 檔案下載區塊 -->
+                
                 <div class="mb-6">
                     <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">相關檔案下載</h3>
                     <div class="space-y-2">
@@ -185,7 +207,7 @@
                         </a>
                     </div>
                 </div>
-                
+
                 <div class="text-xs text-slate-400 dark:text-slate-500 text-center mt-auto pb-4">
                     最後更新: {{ lastUpdated || '尚未連線' }}
                 </div>
@@ -194,28 +216,49 @@
             <!-- 右側內容區 -->
             <section class="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 relative transition-colors">
                 
-                 <!-- 搜尋與篩選列 -->
-                 <div class="mb-6 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
+                <!-- 搜尋與篩選列 -->
+                <div class="mb-6 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
                     <div class="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
                         <!-- 搜尋框 -->
-                        <div class="relative w-full sm:w-80">
+                        <div class="relative w-full sm:w-60">
                             <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-search"></i></span>
                             <input type="text" v-model="searchQuery" placeholder="搜尋名稱、IP、狀態..." 
-                                   class="w-full pl-10 pr-4 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors">
+                                   class="w-full pl-10 pr-4 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors text-sm">
                         </div>
+                        
                         <!-- 位置篩選 -->
-                        <div class="relative w-full sm:w-64">
+                        <div class="relative w-full sm:w-48">
                             <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-location-dot"></i></span>
-                            <select v-model="filterLocation" class="w-full pl-10 pr-8 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors appearance-none cursor-pointer">
+                            <select v-model="filterLocation" class="w-full pl-10 pr-8 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors appearance-none cursor-pointer text-sm">
                                 <option value="">所有位置 ({{ uniqueLocations.length }})</option>
                                 <option v-for="loc in uniqueLocations" :key="loc" :value="loc">{{ loc }}</option>
                             </select>
                             <span class="absolute right-3 top-3 text-slate-400 pointer-events-none"><i class="fa-solid fa-chevron-down text-xs"></i></span>
                         </div>
+
+                        <!-- 排序功能 -->
+                        <div class="flex items-center gap-1 w-full sm:w-auto">
+                            <div class="relative flex-1 sm:w-40">
+                                <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-arrow-down-short-wide"></i></span>
+                                <select v-model="sortBy" class="w-full pl-9 pr-8 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors appearance-none cursor-pointer text-sm">
+                                    <option value="Name">名稱</option>
+                                    <option value="Status">狀態</option>
+                                    <option value="Jobs">佇列數</option>
+                                    <option value="IP">IP 位址</option>
+                                    <option value="Location">位置</option>
+                                    <option value="PortName">連接埠</option>
+                                    <option value="Driver">驅動程式</option>
+                                </select>
+                                <span class="absolute right-3 top-3 text-slate-400 pointer-events-none"><i class="fa-solid fa-chevron-down text-xs"></i></span>
+                            </div>
+                            <button @click="sortDesc = !sortDesc" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-sm" :title="sortDesc ? '降冪' : '升冪'">
+                                <i class="fa-solid" :class="sortDesc ? 'fa-arrow-down-z-a' : 'fa-arrow-up-a-z'"></i>
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- 狀態篩選按鈕 -->
-                    <div class="flex gap-2 flex-wrap justify-start">
+                    <div class="flex gap-2 flex-wrap justify-start mt-2 xl:mt-0">
                          <button @click="filterStatus = ''" 
                             :class="filterStatus === '' ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 border-transparent' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'" 
                             class="px-3 py-1 text-xs rounded-full border transition-all shadow-sm">全部</button>
@@ -238,8 +281,8 @@
                     </div>
                 </div>
 
-                <!-- 列表 Grid -->
-                <div v-if="filteredPrinters.length > 0" class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+                <!-- 列表 Grid (transition-group) -->
+                <transition-group name="list" tag="div" v-if="filteredPrinters.length > 0" class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4 pb-20 relative">
                     <div v-for="p in filteredPrinters" :key="p.Name" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-all relative group">
                         
                         <div class="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl" :class="getStatusColor(p.Status, true)"></div>
@@ -282,6 +325,7 @@
                                 <div v-if="p.PortName" class="truncate"><i class="fa-solid fa-plug w-4"></i> {{ p.PortName }}</div>
                             </div>
 
+                            <!-- 操作按鈕 -->
                             <div class="grid grid-cols-4 gap-2 mt-auto pt-2 border-t border-slate-100 dark:border-slate-700">
                                 <button @click="refreshPrinter(p.Name)" :disabled="loading" title="重新整理連線" class="bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 text-xs py-2 rounded border border-slate-200 dark:border-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-sync" :class="{'fa-spin': loading}"></i> 刷新
@@ -299,13 +343,15 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </transition-group>
 
+                <!-- 無資料顯示 -->
                 <div v-else-if="!loading" class="flex flex-col items-center justify-center h-96 text-slate-400 dark:text-slate-600">
                     <i class="fa-solid fa-ghost text-4xl mb-4"></i>
                     <p>找不到符合的印表機</p>
                 </div>
                 
+                <!-- 載入中遮罩 -->
                 <div v-if="loading && printers.length === 0" class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-10">
                     <div class="flex flex-col items-center">
                         <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-500 mb-3"></i>
@@ -315,7 +361,7 @@
             </section>
         </main>
 
-        <!-- Server Manager Modal [NEW] -->
+        <!-- Server Manager Modal -->
         <transition name="fade">
             <div v-if="showServerModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden transition-colors flex flex-col max-h-[90vh]">
@@ -323,43 +369,27 @@
                         <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-server mr-2 text-blue-500"></i>伺服器管理</h3>
                         <button @click="showServerModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark text-xl"></i></button>
                     </div>
-                    
                     <div class="flex-1 overflow-y-auto p-6">
-                        <!-- 新增/編輯區塊 -->
+                        <!-- 編輯區 -->
                         <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 mb-6">
-                            <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
-                                {{ editingServer.id ? '編輯伺服器' : '新增伺服器' }}
-                            </h4>
+                            <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{{ editingServer.id ? '編輯伺服器' : '新增伺服器' }}</h4>
                             <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                                <div class="sm:col-span-3">
-                                    <input type="text" v-model="editingServer.name" placeholder="名稱 (如: 總公司)" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
-                                </div>
-                                <div class="sm:col-span-4">
-                                    <input type="text" v-model="editingServer.ip" placeholder="IP 位址" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
-                                </div>
-                                <div class="sm:col-span-3">
-                                    <input type="password" v-model="editingServer.key" placeholder="API Key" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
-                                </div>
+                                <div class="sm:col-span-3"><input type="text" v-model="editingServer.name" placeholder="名稱" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white"></div>
+                                <div class="sm:col-span-4"><input type="text" v-model="editingServer.ip" placeholder="IP 位址" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white"></div>
+                                <div class="sm:col-span-3"><input type="password" v-model="editingServer.key" placeholder="API Key" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white"></div>
                                 <div class="sm:col-span-2 flex gap-1">
                                     <button @click="saveServer" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"><i class="fa-solid fa-save"></i></button>
                                     <button v-if="editingServer.id" @click="resetEdit" class="flex-1 bg-slate-400 hover:bg-slate-500 text-white rounded text-sm"><i class="fa-solid fa-rotate-left"></i></button>
                                 </div>
                             </div>
                         </div>
-
-                        <!-- 列表 -->
-                        <div v-if="servers.length === 0" class="text-center py-8 text-slate-400">
-                            <i class="fa-solid fa-database text-3xl mb-2"></i>
-                            <p>尚無伺服器設定，請新增。</p>
-                        </div>
+                        <!-- 列表區 -->
+                        <div v-if="servers.length === 0" class="text-center py-8 text-slate-400"><i class="fa-solid fa-database text-3xl mb-2"></i><p>尚無伺服器設定，請新增。</p></div>
                         <div v-else class="space-y-2">
                             <div v-for="srv in servers" :key="srv.id" class="flex items-center justify-between p-3 bg-white dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600 rounded-lg hover:border-blue-300 dark:hover:border-blue-500 transition-colors group">
                                 <div class="flex items-center gap-3">
                                     <div class="w-2 h-2 rounded-full" :class="srv.id === currentServerId ? 'bg-emerald-500' : 'bg-slate-300'"></div>
-                                    <div>
-                                        <div class="font-bold text-slate-700 dark:text-slate-200 text-sm">{{ srv.name }}</div>
-                                        <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ srv.ip }}</div>
-                                    </div>
+                                    <div><div class="font-bold text-slate-700 dark:text-slate-200 text-sm">{{ srv.name }}</div><div class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ srv.ip }}</div></div>
                                 </div>
                                 <div class="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                     <button @click="useServer(srv)" v-if="srv.id !== currentServerId" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded" title="切換使用"><i class="fa-solid fa-plug"></i></button>
@@ -481,106 +511,12 @@
 
         createApp({
             setup() {
-                // [NEW] 伺服器列表管理
-                const servers = ref([]);
-                const currentServerId = ref('');
-                const showServerModal = ref(false);
-                const editingServer = ref({ id: null, name: '', ip: '', key: '' });
-                
-                // 當前配置 (唯讀，由 currentServerId 驅動)
-                const config = computed(() => {
-                    const srv = servers.value.find(s => s.id === currentServerId.value);
-                    return srv ? { ip: srv.ip, key: srv.key } : { ip: '', key: '' };
-                });
-                
-                const isConfigValid = computed(() => config.value.ip && config.value.key);
-
-                // 從 LocalStorage 載入伺服器
-                const loadServers = () => {
-                    const stored = localStorage.getItem('ps_servers_list');
-                    if (stored) {
-                        servers.value = JSON.parse(stored);
-                    } else {
-                        // 遷移舊設定
-                        const oldIp = localStorage.getItem('ps_server_ip');
-                        const oldKey = localStorage.getItem('ps_api_key');
-                        if (oldIp) {
-                            const newSrv = { id: Date.now(), name: '預設伺服器', ip: oldIp, key: oldKey || '' };
-                            servers.value = [newSrv];
-                            saveServers();
-                            currentServerId.value = newSrv.id;
-                        }
-                    }
-                };
-
-                const saveServers = () => {
-                    localStorage.setItem('ps_servers_list', JSON.stringify(servers.value));
-                };
-
-                // Server Manager Actions
-                const openServerManager = () => {
-                    resetEdit();
-                    showServerModal.value = true;
-                };
-
-                const resetEdit = () => {
-                    editingServer.value = { id: null, name: '', ip: '', key: '' };
-                };
-
-                const editServer = (srv) => {
-                    editingServer.value = { ...srv };
-                };
-
-                const saveServer = () => {
-                    if (!editingServer.value.name || !editingServer.value.ip) {
-                        return toast("請填寫名稱與 IP", "#ef4444");
-                    }
-                    
-                    if (editingServer.value.id) {
-                        // Update
-                        const idx = servers.value.findIndex(s => s.id === editingServer.value.id);
-                        if (idx !== -1) servers.value[idx] = { ...editingServer.value };
-                    } else {
-                        // Create
-                        servers.value.push({ ...editingServer.value, id: Date.now() });
-                    }
-                    
-                    saveServers();
-                    
-                    // 若是第一個，自動選中
-                    if (servers.value.length === 1) {
-                        useServer(servers.value[0]);
-                    }
-                    
-                    resetEdit();
-                    toast("伺服器設定已儲存", "#10b981");
-                };
-
-                const removeServer = (id) => {
-                    if (!confirm("確定要刪除此伺服器設定？")) return;
-                    servers.value = servers.value.filter(s => s.id !== id);
-                    saveServers();
-                    if (currentServerId.value === id) {
-                        currentServerId.value = '';
-                        printers.value = []; // 清空顯示
-                    }
-                };
-
-                const useServer = (srv) => {
-                    currentServerId.value = srv.id;
-                    showServerModal.value = false;
-                    fetchPrinters(true); // 自動連線
-                };
-
-                const switchServer = () => {
-                    if (currentServerId.value) {
-                        fetchPrinters(true);
-                    }
-                };
-
-                // Existing State
+                // 狀態變數
+                const config = ref({ ip: '', key: '' });
                 const autoRefresh = ref(localStorage.getItem('ps_auto_refresh') === 'true');
+                const refreshInterval = ref(parseInt(localStorage.getItem('ps_refresh_interval')) || 60);
                 const darkMode = ref(localStorage.getItem('ps_dark_mode') === 'true');
+
                 const printers = ref([]);
                 const loading = ref(false);
                 const lastUpdated = ref('');
@@ -588,6 +524,10 @@
                 const filterStatus = ref('');
                 const filterLocation = ref('');
                 
+                // Sorting
+                const sortBy = ref('Name');
+                const sortDesc = ref(false);
+
                 // Modals
                 const showEditModal = ref(false);
                 const editTarget = ref(null);
@@ -602,6 +542,12 @@
                 const showLogModal = ref(false);
                 const logData = ref('');
                 const logsLoading = ref(false);
+                
+                // Server Manager
+                const servers = ref([]);
+                const currentServerId = ref('');
+                const showServerModal = ref(false);
+                const editingServer = ref({ id: null, name: '', ip: '', key: '' });
 
                 // Downloads
                 const downloadFiles = [
@@ -613,11 +559,32 @@
 
                 let pollTimer = null;
 
+                const isConfigValid = computed(() => config.value.ip && config.value.key);
+
+                watch(currentServerId, (newId) => {
+                    const srv = servers.value.find(s => s.id === newId);
+                    if (srv) {
+                        config.value.ip = srv.ip;
+                        config.value.key = srv.key;
+                        localStorage.setItem('ps_last_server_id', newId);
+                        fetchPrinters(true);
+                    } else {
+                        config.value.ip = '';
+                        config.value.key = '';
+                        printers.value = [];
+                    }
+                });
+
+                watch(config, (newVal) => {
+                    localStorage.setItem('ps_server_ip', newVal.ip);
+                    localStorage.setItem('ps_api_key', newVal.key);
+                }, { deep: true });
+
                 watch(autoRefresh, (newVal) => {
                     localStorage.setItem('ps_auto_refresh', newVal);
                     if (newVal && isConfigValid.value) {
                         startPolling();
-                        toast("已啟用自動更新 (60s)");
+                        toast(`已啟用自動更新 (${refreshInterval.value}s)`);
                     } else {
                         stopPolling();
                         if (newVal && !isConfigValid.value) {
@@ -637,9 +604,15 @@
 
                 const toggleDarkMode = () => darkMode.value = !darkMode.value;
 
+                const validateInterval = () => {
+                    if (refreshInterval.value < 60) refreshInterval.value = 60;
+                    localStorage.setItem('ps_refresh_interval', refreshInterval.value);
+                    if (autoRefresh.value) startPolling();
+                };
+
                 function startPolling() {
                     if (pollTimer) clearInterval(pollTimer);
-                    pollTimer = setInterval(() => fetchPrinters(false), 60000);
+                    pollTimer = setInterval(() => fetchPrinters(false), refreshInterval.value * 1000);
                 }
 
                 function stopPolling() {
@@ -648,6 +621,50 @@
 
                 const getApiUrl = (path) => `http://${config.value.ip}:8888${path}`;
 
+                const loadServers = () => {
+                    const stored = localStorage.getItem('ps_servers_list');
+                    if (stored) {
+                        servers.value = JSON.parse(stored);
+                    } else {
+                        const oldIp = localStorage.getItem('ps_server_ip');
+                        const oldKey = localStorage.getItem('ps_api_key');
+                        if (oldIp) {
+                            const newSrv = { id: Date.now(), name: '預設伺服器', ip: oldIp, key: oldKey || '' };
+                            servers.value = [newSrv];
+                            saveServers();
+                            currentServerId.value = newSrv.id;
+                        }
+                    }
+                };
+
+                const saveServers = () => {
+                    localStorage.setItem('ps_servers_list', JSON.stringify(servers.value));
+                };
+
+                // Server Manager Actions
+                const openServerManager = () => { resetEdit(); showServerModal.value = true; };
+                const resetEdit = () => { editingServer.value = { id: null, name: '', ip: '', key: '' }; };
+                const editServer = (srv) => { editingServer.value = { ...srv }; };
+                const saveServer = () => {
+                    if (!editingServer.value.name || !editingServer.value.ip) return toast("請填寫名稱與 IP", "#ef4444");
+                    if (editingServer.value.id) {
+                        const idx = servers.value.findIndex(s => s.id === editingServer.value.id);
+                        if (idx !== -1) servers.value[idx] = { ...editingServer.value };
+                    } else { servers.value.push({ ...editingServer.value, id: Date.now() }); }
+                    saveServers();
+                    if (servers.value.length === 1) useServer(servers.value[0]);
+                    resetEdit(); toast("伺服器設定已儲存", "#10b981");
+                };
+                const removeServer = (id) => {
+                    if (!confirm("確定要刪除？")) return;
+                    servers.value = servers.value.filter(s => s.id !== id);
+                    saveServers();
+                    if (currentServerId.value === id) { currentServerId.value = ''; printers.value = []; }
+                };
+                const useServer = (srv) => { currentServerId.value = srv.id; showServerModal.value = false; fetchPrinters(true); };
+                const switchServer = () => { if (currentServerId.value) fetchPrinters(true); };
+
+                // Core Fetch
                 const fetchSinglePrinter = async (name) => {
                     try {
                         const res = await axios.get(getApiUrl(`/printer/status?name=${encodeURIComponent(name)}`), {
@@ -655,9 +672,10 @@
                         });
                         
                         if (res.data.success && res.data.data) {
+                            const newPrinterData = res.data.data;
                             const idx = printers.value.findIndex(p => p.Name === name);
                             if (idx !== -1) {
-                                printers.value[idx] = res.data.data;
+                                printers.value[idx] = newPrinterData;
                             }
                             lastUpdated.value = new Date().toLocaleString();
                         }
@@ -668,7 +686,7 @@
 
                 const fetchPrinters = async (showToast = false) => {
                     if (!isConfigValid.value) {
-                        if (showToast) error("請選擇有效的伺服器設定");
+                        if (showToast) error("請選擇伺服器");
                         return;
                     }
 
@@ -705,7 +723,7 @@
                 });
 
                 const filteredPrinters = computed(() => {
-                    return printers.value.filter(p => {
+                    let result = printers.value.filter(p => {
                         const matchQuery = 
                             p.Name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
                             p.IP.includes(searchQuery.value) ||
@@ -720,6 +738,29 @@
                         const matchLocation = filterLocation.value === '' ? true : p.Location === filterLocation.value;
 
                         return matchQuery && matchStatus && matchLocation;
+                    });
+                    
+                    return result.sort((a, b) => {
+                        let valA = a[sortBy.value] || '';
+                        let valB = b[sortBy.value] || '';
+                        
+                        if (sortBy.value === 'IP') {
+                            const ipA = valA.split('.').map(Number);
+                            const ipB = valB.split('.').map(Number);
+                            if (ipA.length === 4 && ipB.length === 4) {
+                                for(let i=0; i<4; i++) {
+                                    if (ipA[i] !== ipB[i]) return sortDesc.value ? ipB[i] - ipA[i] : ipA[i] - ipB[i];
+                                }
+                            }
+                        }
+                        
+                        if (sortBy.value === 'Jobs') {
+                            return sortDesc.value ? valB - valA : valA - valB;
+                        }
+
+                        if (valA < valB) return sortDesc.value ? 1 : -1;
+                        if (valA > valB) return sortDesc.value ? -1 : 1;
+                        return 0;
                     });
                 });
 
@@ -760,9 +801,6 @@
                 const clearQueue = async (name) => {
                     if (!confirm(`確定要清除 [${name}] 的所有工作嗎？`)) return;
                     await performAction(`/printer/clear?name=${encodeURIComponent(name)}`, "佇列已清除", name);
-                    // Optimistic update
-                    const printer = printers.value.find(p => p.Name === name);
-                    if (printer) printer.Jobs = 0;
                 };
 
                 const refreshPrinter = async (name) => {
@@ -895,56 +933,34 @@
                 // Initialize
                 onMounted(() => {
                     loadServers();
-                    
-                    // 恢復上次選擇的伺服器
                     const lastId = localStorage.getItem('ps_last_server_id');
-                    if (lastId && servers.value.find(s => s.id == lastId)) {
-                        currentServerId.value = parseInt(lastId);
-                    } else if (servers.value.length > 0) {
-                        currentServerId.value = servers.value[0].id;
-                    }
+                    if (lastId && servers.value.find(s => s.id == lastId)) currentServerId.value = parseInt(lastId);
+                    else if (servers.value.length > 0) currentServerId.value = servers.value[0].id;
+                    
+                    const loader = document.getElementById('init-loading');
+                    if (loader) { loader.classList.add('fade-out'); setTimeout(() => loader.remove(), 500); }
 
-                    if (isConfigValid.value) {
+                    if (currentServerId.value) {
                         fetchPrinters();
                         if (autoRefresh.value) {
                             startPolling();
                         }
-                    } else {
-                        // 移除載入畫面，讓用戶可以看到設定介面
-                        const loader = document.getElementById('init-loading');
-                        if (loader) {
-                            loader.classList.add('fade-out');
-                            setTimeout(() => loader.remove(), 500);
-                        }
-                    }
-                });
-                
-                // 監聽伺服器切換
-                watch(currentServerId, (newId) => {
-                    if (newId) {
-                        localStorage.setItem('ps_last_server_id', newId);
                     }
                 });
 
                 return {
-                    // State
                     config, servers, currentServerId, showServerModal, editingServer,
                     printers, loading, lastUpdated, autoRefresh, darkMode, isConfigValid,
                     searchQuery, filterStatus, filterLocation, uniqueLocations, filteredPrinters, errorCount,
-                    // Modals
-                    showEditModal, editTarget, editLocation, editComment, saving,
-                    showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput,
-                    showLogModal, logData, logsLoading,
-                    // Downloads
-                    downloadFiles,
-                    // Methods
+                    sortBy, sortDesc, refreshInterval, validateInterval,
                     getStatusColor, toggleDarkMode,
                     openServerManager, saveServer, removeServer, useServer, resetEdit, editServer, switchServer,
                     fetchPrinters, fetchSinglePrinter,
                     clearQueue, refreshPrinter, restartSpooler, selfHeal, restartScript, 
-                    openEditModal, submitEdit, 
-                    openPdfModal, submitPdf,
-                    showLogs, fetchLogs
+                    showEditModal, editTarget, editLocation, editComment, saving, openEditModal, submitEdit, 
+                    showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput, openPdfModal, submitPdf,
+                    showLogModal, logData, logsLoading, showLogs, fetchLogs,
+                    downloadFiles
                 };
             }
         }).mount('#app');
