@@ -28,11 +28,17 @@
     </script>
 
     <style>
-        [v-cloak] { display: none; }
+        /* [關鍵修正] 加上 !important 防止 Tailwind 覆蓋 */
+        [v-cloak] { display: none !important; }
+        
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
         
-        /* 自訂捲軸 (支援深色) */
+        /* 初始載入畫面的過渡效果 */
+        #init-loading { transition: opacity 0.5s ease-out; }
+        .fade-out { opacity: 0; pointer-events: none; }
+        
+        /* 自訂捲軸 */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         .dark ::-webkit-scrollbar-track { background: #1e293b; }
@@ -42,6 +48,19 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans h-screen flex flex-col overflow-hidden transition-colors duration-300">
+
+    <!-- [新增] 初始資源載入遮罩 (位於 App 之外) -->
+    <div id="init-loading" class="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-[100] flex flex-col items-center justify-center">
+        <div class="text-center">
+            <!-- 簡易 Spinner SVG -->
+            <svg class="animate-spin h-12 w-12 text-blue-600 mb-4 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <h2 class="text-xl font-bold text-slate-700 dark:text-slate-200">系統資源讀取中...</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">正在初始化 Print Server Monitor 儀表板</p>
+        </div>
+    </div>
 
     <div id="app" v-cloak class="flex-1 flex flex-col h-full">
         
@@ -54,7 +73,7 @@
                     </div>
                     <div>
                         <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v1.6 (Offline)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v2.0 (UX Guard)</p>
                     </div>
                 </div>
 
@@ -78,17 +97,18 @@
                                    class="pl-9 pr-3 py-1.5 text-sm rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 w-28 transition-colors">
                         </div>
                     </div>
-                    <button @click="fetchPrinters(true)" :disabled="loading"
-                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 shadow-md shadow-blue-500/20">
+                    <!-- 綁定 disabled 屬性 -->
+                    <button @click="fetchPrinters(true)" :disabled="loading || !isConfigValid"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-500/20 disabled:shadow-none">
                         <i class="fa-solid fa-rotate" :class="{'fa-spin': loading}"></i>
                         <span class="hidden sm:inline">連線</span>
                     </button>
                     <!-- 自動更新開關 -->
                     <div class="flex items-center ml-2 border-l border-slate-300 dark:border-slate-600 pl-3">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" v-model="autoRefresh" class="sr-only peer">
-                            <div class="relative w-9 h-5 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                            <span class="ms-2 text-xs font-medium text-gray-700 dark:text-slate-300">自動</span>
+                            <input type="checkbox" v-model="autoRefresh" :disabled="!isConfigValid" class="sr-only peer">
+                            <div class="relative w-9 h-5 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+                            <span class="ms-2 text-xs font-medium text-gray-700 dark:text-slate-300" :class="{'opacity-50': !isConfigValid}">自動</span>
                         </label>
                     </div>
                 </div>
@@ -103,34 +123,34 @@
                 <div class="mb-6">
                     <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">伺服器全域操作</h3>
                     <div class="space-y-2">
-                        <button @click="restartSpooler" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group">
+                        <button @click="restartSpooler" :disabled="loading || !isConfigValid" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400">重啟 Spooler</span>
-                                <i class="fa-solid fa-arrows-rotate text-slate-400 group-hover:text-blue-500"></i>
+                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-disabled:text-slate-400">重啟 Spooler</span>
+                                <i class="fa-solid fa-arrows-rotate text-slate-400 group-hover:text-blue-500 group-disabled:text-slate-300"></i>
                             </div>
                             <p class="text-xs text-slate-400 mt-1">強制重啟列印服務</p>
                         </button>
                         
-                        <button @click="selfHeal" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-red-300 dark:hover:border-red-500 transition-all group">
+                        <button @click="selfHeal" :disabled="loading || !isConfigValid" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-red-300 dark:hover:border-red-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-red-600 dark:group-hover:text-red-400">深度自癒修復</span>
-                                <i class="fa-solid fa-suitcase-medical text-slate-400 group-hover:text-red-500"></i>
+                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-red-600 dark:group-hover:text-red-400 group-disabled:text-slate-400">深度自癒修復</span>
+                                <i class="fa-solid fa-suitcase-medical text-slate-400 group-hover:text-red-500 group-disabled:text-slate-300"></i>
                             </div>
                             <p class="text-xs text-slate-400 mt-1">清空暫存並重置環境</p>
                         </button>
 
-                         <button @click="restartScript" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-500 transition-all group">
+                         <button @click="restartScript" :disabled="loading || !isConfigValid" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400">重啟 API 服務</span>
-                                <i class="fa-solid fa-power-off text-slate-400 group-hover:text-purple-500"></i>
+                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-disabled:text-slate-400">重啟 API 服務</span>
+                                <i class="fa-solid fa-power-off text-slate-400 group-hover:text-purple-500 group-disabled:text-slate-300"></i>
                             </div>
                             <p class="text-xs text-slate-400 mt-1">重新載入 PowerShell 腳本</p>
                         </button>
 
-                        <button @click="showLogs" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-500 transition-all group">
+                        <button @click="showLogs" :disabled="loading || !isConfigValid" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400">檢視系統日誌</span>
-                                <i class="fa-solid fa-file-lines text-slate-400 group-hover:text-emerald-500"></i>
+                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-disabled:text-slate-400">檢視系統日誌</span>
+                                <i class="fa-solid fa-file-lines text-slate-400 group-hover:text-emerald-500 group-disabled:text-slate-300"></i>
                             </div>
                             <p class="text-xs text-slate-400 mt-1">查看最近 500 行紀錄</p>
                         </button>
@@ -159,14 +179,28 @@
             <!-- 右側內容區 -->
             <section class="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 relative transition-colors">
                 
-                <!-- 搜尋與篩選 -->
-                <div class="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-center">
-                    <div class="relative w-full sm:w-96">
-                        <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-search"></i></span>
-                        <input type="text" v-model="searchQuery" placeholder="搜尋名稱、IP、狀態..." 
-                               class="w-full pl-10 pr-4 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors">
+                <!-- 搜尋與篩選列 -->
+                <div class="mb-6 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
+                    <div class="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+                        <!-- 搜尋框 -->
+                        <div class="relative w-full sm:w-80">
+                            <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" v-model="searchQuery" placeholder="搜尋名稱、IP、狀態..." 
+                                   class="w-full pl-10 pr-4 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors">
+                        </div>
+                        <!-- 位置篩選 -->
+                        <div class="relative w-full sm:w-64">
+                            <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-location-dot"></i></span>
+                            <select v-model="filterLocation" class="w-full pl-10 pr-8 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors appearance-none cursor-pointer">
+                                <option value="">所有位置 ({{ uniqueLocations.length }})</option>
+                                <option v-for="loc in uniqueLocations" :key="loc" :value="loc">{{ loc }}</option>
+                            </select>
+                            <span class="absolute right-3 top-3 text-slate-400 pointer-events-none"><i class="fa-solid fa-chevron-down text-xs"></i></span>
+                        </div>
                     </div>
-                    <div class="flex gap-2 flex-wrap justify-center">
+                    
+                    <!-- 狀態篩選按鈕 -->
+                    <div class="flex gap-2 flex-wrap justify-start">
                          <button @click="filterStatus = ''" 
                             :class="filterStatus === '' ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 border-transparent' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'" 
                             class="px-3 py-1 text-xs rounded-full border transition-all shadow-sm">全部</button>
@@ -177,7 +211,7 @@
 
                          <button @click="filterStatus = 'Issue'" 
                             :class="filterStatus === 'Issue' ? 'bg-orange-600 text-white border-transparent' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'" 
-                            class="px-3 py-1 text-xs rounded-full border transition-all shadow-sm">錯誤+警示</button>
+                            class="px-3 py-1 text-xs rounded-full border transition-all shadow-sm">異常+警告</button>
                          
                          <button @click="filterStatus = 'Error'" 
                             :class="filterStatus === 'Error' ? 'bg-red-600 text-white border-transparent' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'" 
@@ -237,15 +271,18 @@
                                 <div v-if="p.PortName" class="truncate"><i class="fa-solid fa-plug w-4"></i> {{ p.PortName }}</div>
                             </div>
 
-                            <!-- 操作按鈕 -->
-                            <div class="flex gap-2 mt-auto pt-2 border-t border-slate-100 dark:border-slate-700">
-                                <button @click="refreshPrinter(p.Name)" title="重新整理連線" class="flex-1 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 text-xs py-2 rounded border border-slate-200 dark:border-slate-600 transition-colors">
-                                    <i class="fa-solid fa-sync"></i> 刷新
+                            <!-- 操作按鈕 [修正] 加入 disabled 綁定 -->
+                            <div class="grid grid-cols-4 gap-2 mt-auto pt-2 border-t border-slate-100 dark:border-slate-700">
+                                <button @click="refreshPrinter(p.Name)" :disabled="loading" title="重新整理連線" class="bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 text-xs py-2 rounded border border-slate-200 dark:border-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fa-solid fa-sync" :class="{'fa-spin': loading}"></i> 刷新
                                 </button>
-                                <button @click="openPdfModal(p)" title="上傳 PDF 列印" class="flex-1 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-xs py-2 rounded border border-blue-200 dark:border-blue-800 transition-colors">
+                                <button @click="openEditModal(p)" :disabled="loading" title="編輯資訊" class="bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400 text-xs py-2 rounded border border-yellow-200 dark:border-yellow-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fa-solid fa-pen-to-square"></i> 編輯
+                                </button>
+                                <button @click="openPdfModal(p)" :disabled="loading" title="上傳 PDF 列印" class="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-xs py-2 rounded border border-blue-200 dark:border-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-file-pdf"></i> 列印
                                 </button>
-                                <button @click="clearQueue(p.Name)" title="清除佇列" class="flex-1 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-300 text-xs py-2 rounded border border-red-200 dark:border-red-800 transition-colors">
+                                <button @click="clearQueue(p.Name)" :disabled="loading" title="清除佇列" class="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-300 text-xs py-2 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-trash"></i> 清除
                                 </button>
                             </div>
@@ -269,7 +306,39 @@
             </section>
         </main>
 
-        <!-- PDF 上傳 Modal -->
+        <!-- Edit Info Modal -->
+        <transition name="fade">
+            <div v-if="showEditModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition-colors">
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                        <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-pen-to-square mr-2 text-yellow-500"></i>編輯印表機資訊</h3>
+                        <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-sm text-yellow-800 dark:text-yellow-200 mb-4 border border-yellow-100 dark:border-yellow-900/50">
+                            <span class="font-bold">目標：</span> {{ editTarget?.Name }}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">位置 (Location)</label>
+                            <input type="text" v-model="editLocation" class="block w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors shadow-sm" placeholder="例如：2F 會議室">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">備註 (Comment)</label>
+                            <textarea v-model="editComment" rows="3" class="block w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors shadow-sm" placeholder="例如：資產編號 A12345"></textarea>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                        <button @click="showEditModal = false" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium">取消</button>
+                        <button @click="submitEdit" :disabled="saving" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-yellow-500/20">
+                            <i v-if="saving" class="fa-solid fa-spinner fa-spin"></i>
+                            {{ saving ? '儲存中...' : '儲存變更' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- PDF Modal -->
         <transition name="fade">
             <div v-if="showPdfModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition-colors">
@@ -359,7 +428,15 @@
                 const lastUpdated = ref('');
                 const searchQuery = ref('');
                 const filterStatus = ref('');
+                const filterLocation = ref('');
                 
+                // Edit Modal
+                const showEditModal = ref(false);
+                const editTarget = ref(null);
+                const editLocation = ref('');
+                const editComment = ref('');
+                const saving = ref(false);
+
                 // PDF Modal
                 const showPdfModal = ref(false);
                 const selectedPrinter = ref(null);
@@ -374,25 +451,32 @@
 
                 let pollTimer = null;
 
-                // 儲存設定 (IP, Key)
+                const isConfigValid = computed(() => {
+                    return config.value.ip && config.value.ip.trim() !== '' && 
+                           config.value.key && config.value.key.trim() !== '';
+                });
+
                 watch(config, (newVal) => {
                     localStorage.setItem('ps_server_ip', newVal.ip);
                     localStorage.setItem('ps_api_key', newVal.key);
                 }, { deep: true });
 
-                // 儲存設定 (AutoRefresh) 並觸發輪詢
                 watch(autoRefresh, (newVal) => {
                     localStorage.setItem('ps_auto_refresh', newVal);
-                    if (newVal) {
+                    if (newVal && isConfigValid.value) {
                         startPolling();
                         toast("已啟用自動更新 (60s)");
                     } else {
                         stopPolling();
-                        toast("已停用自動更新");
+                        if (newVal && !isConfigValid.value) {
+                            setTimeout(() => autoRefresh.value = false, 100);
+                            error("請先完成連線設定");
+                        } else {
+                            toast("已停用自動更新");
+                        }
                     }
                 });
 
-                // 深色模式邏輯
                 watch(darkMode, (val) => {
                     localStorage.setItem('ps_dark_mode', val);
                     if (val) document.documentElement.classList.add('dark');
@@ -415,8 +499,8 @@
                 const getApiUrl = (path) => `http://${config.value.ip}:8888${path}`;
 
                 const fetchPrinters = async (showToast = false) => {
-                    if (!config.value.ip) {
-                        if (showToast) error("請輸入伺服器 IP");
+                    if (!isConfigValid.value) {
+                        if (showToast) error("請輸入完整的伺服器 IP 與 API Key");
                         return;
                     }
 
@@ -439,10 +523,21 @@
                         autoRefresh.value = false; 
                     } finally {
                         loading.value = false;
+                        
+                        // 移除初始載入遮罩
+                        const loader = document.getElementById('init-loading');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                            setTimeout(() => loader.remove(), 500);
+                        }
                     }
                 };
 
-                // 篩選邏輯
+                const uniqueLocations = computed(() => {
+                    const locs = printers.value.map(p => p.Location).filter(l => l && l.trim() !== '');
+                    return [...new Set(locs)].sort();
+                });
+
                 const filteredPrinters = computed(() => {
                     return printers.value.filter(p => {
                         const matchQuery = 
@@ -456,7 +551,9 @@
                         else if (filterStatus.value === 'Warning') matchStatus = p.Status.includes('Warning');
                         else if (filterStatus.value === 'Issue') matchStatus = p.Status === 'Error' || p.Status.includes('Warning');
 
-                        return matchQuery && matchStatus;
+                        const matchLocation = filterLocation.value === '' ? true : p.Location === filterLocation.value;
+
+                        return matchQuery && matchStatus && matchLocation;
                     });
                 });
 
@@ -509,21 +606,41 @@
                     await performAction(`/service/self-heal`, "深度自癒流程已啟動");
                 };
 
-                // [新增] 重啟 API 腳本
                 const restartScript = async () => {
                      if (!confirm("確定要重啟 API 監控服務嗎？(連線將會短暫中斷)")) return;
-                     // 這裡不需要 performAction 因為重啟後無法馬上得到 response
                      loading.value = true;
                      try {
-                        // 使用 fetch 送出請求後不等回應 (因為服務會斷線)
                         axios.get(getApiUrl('/server/restart-script'), { headers: { 'X-API-KEY': config.value.key } }).catch(() => {});
                         success("重啟指令已發送，請稍候...");
-                        setTimeout(() => fetchPrinters(), 5000); // 5秒後重試連線
-                     } catch(e) {
-                         // ignore
-                     } finally {
-                         loading.value = false;
-                     }
+                        setTimeout(() => fetchPrinters(), 5000); 
+                     } catch(e) { } finally { loading.value = false; }
+                };
+
+                const openEditModal = (printer) => {
+                    editTarget.value = printer;
+                    editLocation.value = printer.Location || '';
+                    editComment.value = printer.Comment || '';
+                    showEditModal.value = true;
+                };
+
+                const submitEdit = async () => {
+                    if(!editTarget.value) return;
+                    saving.value = true;
+                    try {
+                        const url = getApiUrl(`/printer/update?name=${encodeURIComponent(editTarget.value.Name)}&location=${encodeURIComponent(editLocation.value)}&comment=${encodeURIComponent(editComment.value)}`);
+                        const res = await axios.get(url, { headers: { 'X-API-KEY': config.value.key } });
+                        if (res.data.success) {
+                            success("印表機資訊已更新");
+                            showEditModal.value = false;
+                            fetchPrinters(false);
+                        } else {
+                            error(res.data.message);
+                        }
+                    } catch(err) {
+                        error("更新失敗: " + err.message);
+                    } finally {
+                        saving.value = false;
+                    }
                 };
 
                 const openPdfModal = (printer) => {
@@ -587,7 +704,6 @@
                     }
                 };
 
-                // Toast Helper
                 const toast = (text, bg = "#3b82f6") => {
                     Toastify({
                         text: text,
@@ -600,11 +716,18 @@
                 const success = (text) => toast(text, "#10b981");
                 const error = (text) => toast(text, "#ef4444");
 
-                // Init
                 onMounted(() => {
-                    if (config.value.ip && config.value.key) {
+                    // 若尚未設定，移除 loader 以便顯示介面
+                    if (!isConfigValid.value) {
+                         const loader = document.getElementById('init-loading');
+                         if (loader) {
+                            loader.classList.add('fade-out');
+                            setTimeout(() => loader.remove(), 500);
+                        }
+                    }
+
+                    if (isConfigValid.value) {
                         fetchPrinters();
-                        // 若有記憶開啟，則自動啟動
                         if (autoRefresh.value) {
                             startPolling();
                         }
@@ -612,11 +735,12 @@
                 });
 
                 return {
-                    config, printers, loading, lastUpdated, autoRefresh, darkMode,
-                    searchQuery, filterStatus, filteredPrinters, errorCount,
+                    config, printers, loading, lastUpdated, autoRefresh, darkMode, isConfigValid,
+                    searchQuery, filterStatus, filterLocation, uniqueLocations, filteredPrinters, errorCount,
                     getStatusColor, toggleDarkMode,
                     fetchPrinters, 
-                    clearQueue, refreshPrinter, restartSpooler, selfHeal, restartScript, // <--- 已補上
+                    clearQueue, refreshPrinter, restartSpooler, selfHeal, restartScript, 
+                    showEditModal, editTarget, editLocation, editComment, saving, openEditModal, submitEdit, 
                     showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput, openPdfModal, submitPdf,
                     showLogModal, logData, logsLoading, showLogs, fetchLogs
                 };
