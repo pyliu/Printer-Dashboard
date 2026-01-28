@@ -73,7 +73,7 @@
                     </div>
                     <div>
                         <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v2.3 (Hybrid Sync)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v2.4 (Conditional Actions)</p>
                     </div>
                 </div>
 
@@ -279,9 +279,11 @@
                                 <button @click="openEditModal(p)" :disabled="loading" title="編輯資訊" class="bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400 text-xs py-2 rounded border border-yellow-200 dark:border-yellow-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-pen-to-square"></i> 編輯
                                 </button>
-                                <button @click="openPdfModal(p)" :disabled="loading" title="上傳 PDF 列印" class="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-xs py-2 rounded border border-blue-200 dark:border-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <!-- [修正] 僅在就緒狀態顯示列印按鈕 -->
+                                <button v-if="p.Status === 'Ready'" @click="openPdfModal(p)" :disabled="loading" title="上傳 PDF 列印" class="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-xs py-2 rounded border border-blue-200 dark:border-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-file-pdf"></i> 列印
                                 </button>
+                                <div v-else class="flex-1"></div> <!-- 佔位符 -->
                                 <button @click="clearQueue(p.Name)" :disabled="loading" title="清除佇列" class="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-300 text-xs py-2 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-trash"></i> 清除
                                 </button>
@@ -613,6 +615,10 @@
                 const clearQueue = async (name) => {
                     if (!confirm(`確定要清除 [${name}] 的所有工作嗎？`)) return;
                     await performAction(`/printer/clear?name=${encodeURIComponent(name)}`, "佇列已清除", name);
+                    // 樂觀更新在 performAction 的 callback 中處理更準確，或者這裡可以先清0
+                    // 為了 UX，我們這裡先清0
+                    const printer = printers.value.find(p => p.Name === name);
+                    if (printer) printer.Jobs = 0;
                 };
 
                 const refreshPrinter = async (name) => {
