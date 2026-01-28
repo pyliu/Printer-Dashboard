@@ -49,7 +49,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans h-screen flex flex-col overflow-hidden transition-colors duration-300">
 
-    <!-- [新增] 初始資源載入遮罩 (位於 App 之外) -->
+    <!-- 初始資源載入遮罩 -->
     <div id="init-loading" class="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-[100] flex flex-col items-center justify-center">
         <div class="text-center">
             <!-- 簡易 Spinner SVG -->
@@ -73,7 +73,7 @@
                     </div>
                     <div>
                         <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v2.0 (UX Guard)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v2.3 (Hybrid Sync)</p>
                     </div>
                 </div>
 
@@ -420,6 +420,7 @@
                     key: localStorage.getItem('ps_api_key') || ''
                 });
                 
+                // 自動讀取上次的自動更新設定 (預設為 false)
                 const autoRefresh = ref(localStorage.getItem('ps_auto_refresh') === 'true');
                 const darkMode = ref(localStorage.getItem('ps_dark_mode') === 'true');
 
@@ -498,6 +499,25 @@
 
                 const getApiUrl = (path) => `http://${config.value.ip}:8888${path}`;
 
+                const fetchSinglePrinter = async (name) => {
+                    try {
+                        const res = await axios.get(getApiUrl(`/printer/status?name=${encodeURIComponent(name)}`), {
+                            headers: { 'X-API-KEY': config.value.key }
+                        });
+                        
+                        if (res.data.success && res.data.data) {
+                            const newPrinterData = res.data.data;
+                            const idx = printers.value.findIndex(p => p.Name === name);
+                            if (idx !== -1) {
+                                printers.value[idx] = newPrinterData;
+                            }
+                            lastUpdated.value = new Date().toLocaleString();
+                        }
+                    } catch (err) {
+                        console.error("Failed to refresh single printer", err);
+                    }
+                };
+
                 const fetchPrinters = async (showToast = false) => {
                     if (!isConfigValid.value) {
                         if (showToast) error("請輸入完整的伺服器 IP 與 API Key");
@@ -524,7 +544,6 @@
                     } finally {
                         loading.value = false;
                         
-                        // 移除初始載入遮罩
                         const loader = document.getElementById('init-loading');
                         if (loader) {
                             loader.classList.add('fade-out');
@@ -568,7 +587,7 @@
                     return isBorder ? 'bg-amber-500' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
                 };
 
-                const performAction = async (endpoint, successMsg) => {
+                const performAction = async (endpoint, successMsg, targetPrinterName = null) => {
                     loading.value = true;
                     try {
                         const res = await axios.get(getApiUrl(endpoint), {
@@ -576,7 +595,11 @@
                         });
                         if (res.data.success) {
                             success(res.data.message || successMsg);
-                            fetchPrinters(false);
+                            if (targetPrinterName) {
+                                fetchSinglePrinter(targetPrinterName);
+                            } else {
+                                fetchPrinters(false);
+                            }
                         } else {
                             error(res.data.message);
                         }
@@ -589,11 +612,11 @@
 
                 const clearQueue = async (name) => {
                     if (!confirm(`確定要清除 [${name}] 的所有工作嗎？`)) return;
-                    await performAction(`/printer/clear?name=${encodeURIComponent(name)}`, "佇列已清除");
+                    await performAction(`/printer/clear?name=${encodeURIComponent(name)}`, "佇列已清除", name);
                 };
 
                 const refreshPrinter = async (name) => {
-                    await performAction(`/printer/refresh?name=${encodeURIComponent(name)}`, "重新整理指令已發送");
+                    await performAction(`/printer/refresh?name=${encodeURIComponent(name)}`, "重新整理指令已發送", name);
                 };
 
                 const restartSpooler = async () => {
@@ -632,7 +655,9 @@
                         if (res.data.success) {
                             success("印表機資訊已更新");
                             showEditModal.value = false;
-                            fetchPrinters(false);
+                            // 樂觀更新
+                            editTarget.value.Location = editLocation.value;
+                            editTarget.value.Comment = editComment.value;
                         } else {
                             error(res.data.message);
                         }
@@ -667,6 +692,7 @@
                             success("PDF 已成功發送至列印佇列");
                             showPdfModal.value = false;
                             fileInput.value.value = '';
+                            setTimeout(() => fetchSinglePrinter(selectedPrinter.value.Name), 1000);
                         } else {
                             error(res.data.message);
                         }
@@ -717,7 +743,6 @@
                 const error = (text) => toast(text, "#ef4444");
 
                 onMounted(() => {
-                    // 若尚未設定，移除 loader 以便顯示介面
                     if (!isConfigValid.value) {
                          const loader = document.getElementById('init-loading');
                          if (loader) {
@@ -738,7 +763,7 @@
                     config, printers, loading, lastUpdated, autoRefresh, darkMode, isConfigValid,
                     searchQuery, filterStatus, filterLocation, uniqueLocations, filteredPrinters, errorCount,
                     getStatusColor, toggleDarkMode,
-                    fetchPrinters, 
+                    fetchPrinters, fetchSinglePrinter,
                     clearQueue, refreshPrinter, restartSpooler, selfHeal, restartScript, 
                     showEditModal, editTarget, editLocation, editComment, saving, openEditModal, submitEdit, 
                     showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput, openPdfModal, submitPdf,
