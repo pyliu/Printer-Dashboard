@@ -18,8 +18,8 @@
                 extend: {
                     colors: {
                         slate: {
-                            850: '#1e293b', // 自訂深色背景
-                            950: '#0f172a'  // 自訂更深背景
+                            850: '#1e293b', 
+                            950: '#0f172a'
                         }
                     }
                 }
@@ -28,17 +28,12 @@
     </script>
 
     <style>
-        /* [關鍵修正] 加上 !important 防止 Tailwind 覆蓋 */
         [v-cloak] { display: none !important; }
-        
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
-        
-        /* 初始載入畫面的過渡效果 */
         #init-loading { transition: opacity 0.5s ease-out; }
         .fade-out { opacity: 0; pointer-events: none; }
         
-        /* 自訂捲軸 */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         .dark ::-webkit-scrollbar-track { background: #1e293b; }
@@ -52,7 +47,6 @@
     <!-- 初始資源載入遮罩 -->
     <div id="init-loading" class="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-[100] flex flex-col items-center justify-center">
         <div class="text-center">
-            <!-- 簡易 Spinner SVG -->
             <svg class="animate-spin h-12 w-12 text-blue-600 mb-4 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -73,42 +67,49 @@
                     </div>
                     <div>
                         <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v2.4 (Conditional Actions)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v3.0 (Multi-Server)</p>
                     </div>
                 </div>
 
-                <!-- 連線設定區 -->
+                <!-- 連線設定區 (改版：下拉選單 + 管理按鈕) -->
                 <div class="flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
                     
-                    <!-- 深色模式切換 -->
                     <button @click="toggleDarkMode" class="w-8 h-8 rounded-full bg-white dark:bg-slate-700 text-slate-600 dark:text-yellow-400 shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-600 transition-all mr-2" :title="darkMode ? '切換為亮色' : '切換為深色'">
                         <i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
                     </button>
 
-                    <div class="flex flex-col sm:flex-row gap-2">
-                        <div class="relative">
-                            <span class="absolute left-3 top-2 text-slate-400"><i class="fa-solid fa-server"></i></span>
-                            <input type="text" v-model="config.ip" placeholder="伺服器 IP" 
-                                   class="pl-9 pr-3 py-1.5 text-sm rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 w-40 transition-colors">
+                    <!-- 伺服器切換器 -->
+                    <div class="relative group">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400"></i>
                         </div>
-                        <div class="relative">
-                            <span class="absolute left-3 top-2 text-slate-400"><i class="fa-solid fa-key"></i></span>
-                            <input type="password" v-model="config.key" placeholder="API Key" 
-                                   class="pl-9 pr-3 py-1.5 text-sm rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 w-28 transition-colors">
+                        <select v-model="currentServerId" @change="switchServer" class="pl-9 pr-8 py-1.5 text-sm rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 w-56 transition-colors appearance-none cursor-pointer">
+                            <option value="" disabled>請選擇伺服器</option>
+                            <option v-for="srv in servers" :key="srv.id" :value="srv.id">
+                                {{ srv.name }} ({{ srv.ip }})
+                            </option>
+                        </select>
+                        <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
                         </div>
                     </div>
-                    <!-- 綁定 disabled 屬性 -->
-                    <button @click="fetchPrinters(true)" :disabled="loading || !isConfigValid"
+
+                    <!-- 伺服器管理按鈕 -->
+                    <button @click="openServerManager" class="bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded text-sm font-medium transition-colors" title="管理伺服器列表">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+
+                    <button @click="fetchPrinters(true)" :disabled="loading || !currentServerId"
                             class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-500/20 disabled:shadow-none">
                         <i class="fa-solid fa-rotate" :class="{'fa-spin': loading}"></i>
                         <span class="hidden sm:inline">連線</span>
                     </button>
-                    <!-- 自動更新開關 -->
+                    
                     <div class="flex items-center ml-2 border-l border-slate-300 dark:border-slate-600 pl-3">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" v-model="autoRefresh" :disabled="!isConfigValid" class="sr-only peer">
+                            <input type="checkbox" v-model="autoRefresh" :disabled="!currentServerId" class="sr-only peer">
                             <div class="relative w-9 h-5 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
-                            <span class="ms-2 text-xs font-medium text-gray-700 dark:text-slate-300" :class="{'opacity-50': !isConfigValid}">自動</span>
+                            <span class="ms-2 text-xs font-medium text-gray-700 dark:text-slate-300" :class="{'opacity-50': !currentServerId}">自動</span>
                         </label>
                     </div>
                 </div>
@@ -170,8 +171,22 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 檔案下載區塊 -->
+                <div class="mb-6">
+                    <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">相關檔案下載</h3>
+                    <div class="space-y-2">
+                        <a v-for="file in downloadFiles" :key="file.url" :href="file.url" download class="block w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group">
+                            <div class="flex items-center">
+                                <i :class="file.icon" class="w-5 text-center mr-2"></i>
+                                <span class="text-slate-700 dark:text-slate-200 text-xs group-hover:text-blue-600 dark:group-hover:text-blue-400">{{ file.name }}</span>
+                                <i class="fa-solid fa-download ml-auto text-slate-300 group-hover:text-blue-500 text-xs"></i>
+                            </div>
+                        </a>
+                    </div>
+                </div>
                 
-                <div class="text-xs text-slate-400 dark:text-slate-500 text-center mt-auto">
+                <div class="text-xs text-slate-400 dark:text-slate-500 text-center mt-auto pb-4">
                     最後更新: {{ lastUpdated || '尚未連線' }}
                 </div>
             </aside>
@@ -179,8 +194,8 @@
             <!-- 右側內容區 -->
             <section class="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 relative transition-colors">
                 
-                <!-- 搜尋與篩選列 -->
-                <div class="mb-6 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
+                 <!-- 搜尋與篩選列 -->
+                 <div class="mb-6 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
                     <div class="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
                         <!-- 搜尋框 -->
                         <div class="relative w-full sm:w-80">
@@ -227,7 +242,6 @@
                 <div v-if="filteredPrinters.length > 0" class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
                     <div v-for="p in filteredPrinters" :key="p.Name" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-all relative group">
                         
-                        <!-- 狀態燈號條 -->
                         <div class="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl" :class="getStatusColor(p.Status, true)"></div>
 
                         <div class="pl-3">
@@ -252,18 +266,15 @@
                                 </div>
                             </div>
 
-                            <!-- 錯誤細節 -->
                             <div v-if="p.ErrorDetails" class="mb-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs px-2 py-1.5 rounded border border-red-100 dark:border-red-900/50 flex items-start gap-2">
                                 <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
                                 <span>{{ p.ErrorDetails }}</span>
                             </div>
                             
-                             <!-- 註解 -->
                              <div v-if="p.Comment" class="mb-3 text-xs text-slate-500 dark:text-slate-400 italic">
                                 <i class="fa-regular fa-comment-dots mr-1"></i>{{ p.Comment }}
                             </div>
 
-                            <!-- 資訊欄 -->
                             <div class="grid grid-cols-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400 mb-4 border-t border-slate-100 dark:border-slate-700 pt-2">
                                 <div v-if="p.Location" class="truncate" :title="p.Location"><i class="fa-solid fa-location-dot w-4"></i> {{ p.Location }}</div>
                                 <div v-if="p.ShareName" class="truncate" :title="p.ShareName"><i class="fa-solid fa-share-nodes w-4"></i> {{ p.ShareName }}</div>
@@ -271,7 +282,6 @@
                                 <div v-if="p.PortName" class="truncate"><i class="fa-solid fa-plug w-4"></i> {{ p.PortName }}</div>
                             </div>
 
-                            <!-- 操作按鈕 [修正] 加入 disabled 綁定 -->
                             <div class="grid grid-cols-4 gap-2 mt-auto pt-2 border-t border-slate-100 dark:border-slate-700">
                                 <button @click="refreshPrinter(p.Name)" :disabled="loading" title="重新整理連線" class="bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 text-xs py-2 rounded border border-slate-200 dark:border-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-sync" :class="{'fa-spin': loading}"></i> 刷新
@@ -279,11 +289,10 @@
                                 <button @click="openEditModal(p)" :disabled="loading" title="編輯資訊" class="bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400 text-xs py-2 rounded border border-yellow-200 dark:border-yellow-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-pen-to-square"></i> 編輯
                                 </button>
-                                <!-- [修正] 僅在就緒狀態顯示列印按鈕 -->
                                 <button v-if="p.Status === 'Ready'" @click="openPdfModal(p)" :disabled="loading" title="上傳 PDF 列印" class="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-xs py-2 rounded border border-blue-200 dark:border-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-file-pdf"></i> 列印
                                 </button>
-                                <div v-else class="flex-1"></div> <!-- 佔位符 -->
+                                <div v-else class="flex-1"></div>
                                 <button @click="clearQueue(p.Name)" :disabled="loading" title="清除佇列" class="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-300 text-xs py-2 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fa-solid fa-trash"></i> 清除
                                 </button>
@@ -292,13 +301,11 @@
                     </div>
                 </div>
 
-                <!-- 無資料顯示 -->
                 <div v-else-if="!loading" class="flex flex-col items-center justify-center h-96 text-slate-400 dark:text-slate-600">
                     <i class="fa-solid fa-ghost text-4xl mb-4"></i>
                     <p>找不到符合的印表機</p>
                 </div>
                 
-                <!-- 載入中遮罩 -->
                 <div v-if="loading && printers.length === 0" class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-10">
                     <div class="flex flex-col items-center">
                         <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-500 mb-3"></i>
@@ -308,13 +315,71 @@
             </section>
         </main>
 
+        <!-- Server Manager Modal [NEW] -->
+        <transition name="fade">
+            <div v-if="showServerModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden transition-colors flex flex-col max-h-[90vh]">
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                        <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-server mr-2 text-blue-500"></i>伺服器管理</h3>
+                        <button @click="showServerModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <!-- 新增/編輯區塊 -->
+                        <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 mb-6">
+                            <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
+                                {{ editingServer.id ? '編輯伺服器' : '新增伺服器' }}
+                            </h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                                <div class="sm:col-span-3">
+                                    <input type="text" v-model="editingServer.name" placeholder="名稱 (如: 總公司)" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                                </div>
+                                <div class="sm:col-span-4">
+                                    <input type="text" v-model="editingServer.ip" placeholder="IP 位址" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                                </div>
+                                <div class="sm:col-span-3">
+                                    <input type="password" v-model="editingServer.key" placeholder="API Key" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                                </div>
+                                <div class="sm:col-span-2 flex gap-1">
+                                    <button @click="saveServer" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"><i class="fa-solid fa-save"></i></button>
+                                    <button v-if="editingServer.id" @click="resetEdit" class="flex-1 bg-slate-400 hover:bg-slate-500 text-white rounded text-sm"><i class="fa-solid fa-rotate-left"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 列表 -->
+                        <div v-if="servers.length === 0" class="text-center py-8 text-slate-400">
+                            <i class="fa-solid fa-database text-3xl mb-2"></i>
+                            <p>尚無伺服器設定，請新增。</p>
+                        </div>
+                        <div v-else class="space-y-2">
+                            <div v-for="srv in servers" :key="srv.id" class="flex items-center justify-between p-3 bg-white dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600 rounded-lg hover:border-blue-300 dark:hover:border-blue-500 transition-colors group">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-2 h-2 rounded-full" :class="srv.id === currentServerId ? 'bg-emerald-500' : 'bg-slate-300'"></div>
+                                    <div>
+                                        <div class="font-bold text-slate-700 dark:text-slate-200 text-sm">{{ srv.name }}</div>
+                                        <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ srv.ip }}</div>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                    <button @click="useServer(srv)" v-if="srv.id !== currentServerId" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded" title="切換使用"><i class="fa-solid fa-plug"></i></button>
+                                    <button @click="editServer(srv)" class="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded" title="編輯"><i class="fa-solid fa-pen"></i></button>
+                                    <button @click="removeServer(srv.id)" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="刪除"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
         <!-- Edit Info Modal -->
         <transition name="fade">
             <div v-if="showEditModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition-colors">
                     <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
                         <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-pen-to-square mr-2 text-yellow-500"></i>編輯印表機資訊</h3>
-                        <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+                        <button @click="showEditModal = false" :disabled="saving" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="p-6 space-y-4">
                         <div class="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-sm text-yellow-800 dark:text-yellow-200 mb-4 border border-yellow-100 dark:border-yellow-900/50">
@@ -330,7 +395,7 @@
                         </div>
                     </div>
                     <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
-                        <button @click="showEditModal = false" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium">取消</button>
+                        <button @click="showEditModal = false" :disabled="saving" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">取消</button>
                         <button @click="submitEdit" :disabled="saving" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-yellow-500/20">
                             <i v-if="saving" class="fa-solid fa-spinner fa-spin"></i>
                             {{ saving ? '儲存中...' : '儲存變更' }}
@@ -346,7 +411,7 @@
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition-colors">
                     <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
                         <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-print mr-2 text-blue-600 dark:text-blue-400"></i>上傳 PDF 列印</h3>
-                        <button @click="showPdfModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+                        <button @click="showPdfModal = false" :disabled="uploading" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="p-6 space-y-4">
                         <div class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200 mb-4">
@@ -377,7 +442,7 @@
                         </div>
                     </div>
                     <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
-                        <button @click="showPdfModal = false" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium">取消</button>
+                        <button @click="showPdfModal = false" :disabled="uploading" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">取消</button>
                         <button @click="submitPdf" :disabled="uploading" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-500/20">
                             <i v-if="uploading" class="fa-solid fa-spinner fa-spin"></i>
                             {{ uploading ? '傳送中...' : '確認列印' }}
@@ -394,8 +459,8 @@
                     <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
                         <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-terminal mr-2 text-emerald-600"></i>伺服器日誌 (Server Logs)</h3>
                         <div class="flex items-center gap-3">
-                            <button @click="fetchLogs" class="text-sm text-blue-600 dark:text-blue-400 hover:underline"><i class="fa-solid fa-sync mr-1"></i>重新整理</button>
-                            <button @click="showLogModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+                            <button @click="fetchLogs" :disabled="logsLoading" class="text-sm text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"><i class="fa-solid fa-sync mr-1" :class="{'fa-spin': logsLoading}"></i>重新整理</button>
+                            <button @click="showLogModal = false" :disabled="logsLoading" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"><i class="fa-solid fa-xmark text-xl"></i></button>
                         </div>
                     </div>
                     <div class="flex-1 overflow-auto bg-slate-900 p-4 font-mono text-xs text-green-400 leading-relaxed whitespace-pre-wrap" id="logContent">
@@ -416,16 +481,106 @@
 
         createApp({
             setup() {
-                // 狀態變數: 優先從 localStorage 讀取
-                const config = ref({
-                    ip: localStorage.getItem('ps_server_ip') || '',
-                    key: localStorage.getItem('ps_api_key') || ''
+                // [NEW] 伺服器列表管理
+                const servers = ref([]);
+                const currentServerId = ref('');
+                const showServerModal = ref(false);
+                const editingServer = ref({ id: null, name: '', ip: '', key: '' });
+                
+                // 當前配置 (唯讀，由 currentServerId 驅動)
+                const config = computed(() => {
+                    const srv = servers.value.find(s => s.id === currentServerId.value);
+                    return srv ? { ip: srv.ip, key: srv.key } : { ip: '', key: '' };
                 });
                 
-                // 自動讀取上次的自動更新設定 (預設為 false)
+                const isConfigValid = computed(() => config.value.ip && config.value.key);
+
+                // 從 LocalStorage 載入伺服器
+                const loadServers = () => {
+                    const stored = localStorage.getItem('ps_servers_list');
+                    if (stored) {
+                        servers.value = JSON.parse(stored);
+                    } else {
+                        // 遷移舊設定
+                        const oldIp = localStorage.getItem('ps_server_ip');
+                        const oldKey = localStorage.getItem('ps_api_key');
+                        if (oldIp) {
+                            const newSrv = { id: Date.now(), name: '預設伺服器', ip: oldIp, key: oldKey || '' };
+                            servers.value = [newSrv];
+                            saveServers();
+                            currentServerId.value = newSrv.id;
+                        }
+                    }
+                };
+
+                const saveServers = () => {
+                    localStorage.setItem('ps_servers_list', JSON.stringify(servers.value));
+                };
+
+                // Server Manager Actions
+                const openServerManager = () => {
+                    resetEdit();
+                    showServerModal.value = true;
+                };
+
+                const resetEdit = () => {
+                    editingServer.value = { id: null, name: '', ip: '', key: '' };
+                };
+
+                const editServer = (srv) => {
+                    editingServer.value = { ...srv };
+                };
+
+                const saveServer = () => {
+                    if (!editingServer.value.name || !editingServer.value.ip) {
+                        return toast("請填寫名稱與 IP", "#ef4444");
+                    }
+                    
+                    if (editingServer.value.id) {
+                        // Update
+                        const idx = servers.value.findIndex(s => s.id === editingServer.value.id);
+                        if (idx !== -1) servers.value[idx] = { ...editingServer.value };
+                    } else {
+                        // Create
+                        servers.value.push({ ...editingServer.value, id: Date.now() });
+                    }
+                    
+                    saveServers();
+                    
+                    // 若是第一個，自動選中
+                    if (servers.value.length === 1) {
+                        useServer(servers.value[0]);
+                    }
+                    
+                    resetEdit();
+                    toast("伺服器設定已儲存", "#10b981");
+                };
+
+                const removeServer = (id) => {
+                    if (!confirm("確定要刪除此伺服器設定？")) return;
+                    servers.value = servers.value.filter(s => s.id !== id);
+                    saveServers();
+                    if (currentServerId.value === id) {
+                        currentServerId.value = '';
+                        printers.value = []; // 清空顯示
+                    }
+                };
+
+                const useServer = (srv) => {
+                    currentServerId.value = srv.id;
+                    showServerModal.value = false;
+                    fetchPrinters(true); // 自動連線
+                };
+
+                const switchServer = () => {
+                    if (currentServerId.value) {
+                        fetchPrinters(true);
+                    }
+                };
+
+                // Existing State
                 const autoRefresh = ref(localStorage.getItem('ps_auto_refresh') === 'true');
                 const darkMode = ref(localStorage.getItem('ps_dark_mode') === 'true');
-
                 const printers = ref([]);
                 const loading = ref(false);
                 const lastUpdated = ref('');
@@ -433,36 +588,30 @@
                 const filterStatus = ref('');
                 const filterLocation = ref('');
                 
-                // Edit Modal
+                // Modals
                 const showEditModal = ref(false);
                 const editTarget = ref(null);
                 const editLocation = ref('');
                 const editComment = ref('');
                 const saving = ref(false);
-
-                // PDF Modal
                 const showPdfModal = ref(false);
                 const selectedPrinter = ref(null);
                 const pdfDuplex = ref("0");
                 const uploading = ref(false);
                 const fileInput = ref(null);
-
-                // Logs Modal
                 const showLogModal = ref(false);
                 const logData = ref('');
                 const logsLoading = ref(false);
 
+                // Downloads
+                const downloadFiles = [
+                    { name: '主程式 (.ps1)', url: 'server/Printer_API_Agent.ps1', icon: 'fa-solid fa-terminal text-blue-500' },
+                    { name: '原始碼 (.txt)', url: 'server/Printer_API_Agent.txt', icon: 'fa-regular fa-file-lines text-slate-500' },
+                    { name: 'API 測試指令集', url: 'server/Printer_API_Agent_API測試指令集.pdf', icon: 'fa-solid fa-file-pdf text-red-500' },
+                    { name: '部署指南', url: 'server/Printer_API_Agent_Windows_Server_部署指南.pdf', icon: 'fa-solid fa-book text-emerald-500' }
+                ];
+
                 let pollTimer = null;
-
-                const isConfigValid = computed(() => {
-                    return config.value.ip && config.value.ip.trim() !== '' && 
-                           config.value.key && config.value.key.trim() !== '';
-                });
-
-                watch(config, (newVal) => {
-                    localStorage.setItem('ps_server_ip', newVal.ip);
-                    localStorage.setItem('ps_api_key', newVal.key);
-                }, { deep: true });
 
                 watch(autoRefresh, (newVal) => {
                     localStorage.setItem('ps_auto_refresh', newVal);
@@ -486,9 +635,7 @@
                     else document.documentElement.classList.remove('dark');
                 }, { immediate: true });
 
-                const toggleDarkMode = () => {
-                    darkMode.value = !darkMode.value;
-                };
+                const toggleDarkMode = () => darkMode.value = !darkMode.value;
 
                 function startPolling() {
                     if (pollTimer) clearInterval(pollTimer);
@@ -508,10 +655,9 @@
                         });
                         
                         if (res.data.success && res.data.data) {
-                            const newPrinterData = res.data.data;
                             const idx = printers.value.findIndex(p => p.Name === name);
                             if (idx !== -1) {
-                                printers.value[idx] = newPrinterData;
+                                printers.value[idx] = res.data.data;
                             }
                             lastUpdated.value = new Date().toLocaleString();
                         }
@@ -522,7 +668,7 @@
 
                 const fetchPrinters = async (showToast = false) => {
                     if (!isConfigValid.value) {
-                        if (showToast) error("請輸入完整的伺服器 IP 與 API Key");
+                        if (showToast) error("請選擇有效的伺服器設定");
                         return;
                     }
 
@@ -545,7 +691,6 @@
                         autoRefresh.value = false; 
                     } finally {
                         loading.value = false;
-                        
                         const loader = document.getElementById('init-loading');
                         if (loader) {
                             loader.classList.add('fade-out');
@@ -615,8 +760,7 @@
                 const clearQueue = async (name) => {
                     if (!confirm(`確定要清除 [${name}] 的所有工作嗎？`)) return;
                     await performAction(`/printer/clear?name=${encodeURIComponent(name)}`, "佇列已清除", name);
-                    // 樂觀更新在 performAction 的 callback 中處理更準確，或者這裡可以先清0
-                    // 為了 UX，我們這裡先清0
+                    // Optimistic update
                     const printer = printers.value.find(p => p.Name === name);
                     if (printer) printer.Jobs = 0;
                 };
@@ -661,7 +805,7 @@
                         if (res.data.success) {
                             success("印表機資訊已更新");
                             showEditModal.value = false;
-                            // 樂觀更新
+                            // Optimistic update
                             editTarget.value.Location = editLocation.value;
                             editTarget.value.Comment = editComment.value;
                         } else {
@@ -748,13 +892,16 @@
                 const success = (text) => toast(text, "#10b981");
                 const error = (text) => toast(text, "#ef4444");
 
+                // Initialize
                 onMounted(() => {
-                    if (!isConfigValid.value) {
-                         const loader = document.getElementById('init-loading');
-                         if (loader) {
-                            loader.classList.add('fade-out');
-                            setTimeout(() => loader.remove(), 500);
-                        }
+                    loadServers();
+                    
+                    // 恢復上次選擇的伺服器
+                    const lastId = localStorage.getItem('ps_last_server_id');
+                    if (lastId && servers.value.find(s => s.id == lastId)) {
+                        currentServerId.value = parseInt(lastId);
+                    } else if (servers.value.length > 0) {
+                        currentServerId.value = servers.value[0].id;
                     }
 
                     if (isConfigValid.value) {
@@ -762,18 +909,42 @@
                         if (autoRefresh.value) {
                             startPolling();
                         }
+                    } else {
+                        // 移除載入畫面，讓用戶可以看到設定介面
+                        const loader = document.getElementById('init-loading');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                            setTimeout(() => loader.remove(), 500);
+                        }
+                    }
+                });
+                
+                // 監聽伺服器切換
+                watch(currentServerId, (newId) => {
+                    if (newId) {
+                        localStorage.setItem('ps_last_server_id', newId);
                     }
                 });
 
                 return {
-                    config, printers, loading, lastUpdated, autoRefresh, darkMode, isConfigValid,
+                    // State
+                    config, servers, currentServerId, showServerModal, editingServer,
+                    printers, loading, lastUpdated, autoRefresh, darkMode, isConfigValid,
                     searchQuery, filterStatus, filterLocation, uniqueLocations, filteredPrinters, errorCount,
+                    // Modals
+                    showEditModal, editTarget, editLocation, editComment, saving,
+                    showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput,
+                    showLogModal, logData, logsLoading,
+                    // Downloads
+                    downloadFiles,
+                    // Methods
                     getStatusColor, toggleDarkMode,
+                    openServerManager, saveServer, removeServer, useServer, resetEdit, editServer, switchServer,
                     fetchPrinters, fetchSinglePrinter,
                     clearQueue, refreshPrinter, restartSpooler, selfHeal, restartScript, 
-                    showEditModal, editTarget, editLocation, editComment, saving, openEditModal, submitEdit, 
-                    showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput, openPdfModal, submitPdf,
-                    showLogModal, logData, logsLoading, showLogs, fetchLogs
+                    openEditModal, submitEdit, 
+                    openPdfModal, submitPdf,
+                    showLogs, fetchLogs
                 };
             }
         }).mount('#app');
