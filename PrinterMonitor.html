@@ -17,7 +17,10 @@
             theme: {
                 extend: {
                     colors: {
-                        slate: { 850: '#1e293b', 950: '#0f172a' }
+                        slate: {
+                            850: '#1e293b',
+                            950: '#0f172a'
+                        }
                     }
                 }
             }
@@ -27,37 +30,15 @@
     <style>
         [v-cloak] { display: none !important; }
         
-        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
-        .fade-enter-from, .fade-leave-to { opacity: 0; }
-        
         #init-loading { transition: opacity 0.5s ease-out; }
         .fade-out { opacity: 0; pointer-events: none; }
-
-        /* Vue transition-group 動畫控制 */
-        .list-move {
-          transition: transform 1.5s cubic-bezier(0.55, 0, 0.1, 1) !important;
-        }
-
-        .list-enter-active,
-        .list-leave-active {
-          transition: all 1s cubic-bezier(0.55, 0, 0.1, 1) !important;
-        }
-
-        .list-enter-from {
-          opacity: 0;
-          transform: translateY(30px);
-        }
-
-        .list-leave-to {
-          opacity: 0;
-          transform: translateY(-30px);
-        }
-
-        /* 如果使用了其他動畫名稱，也添加這些 */
-        .fade-move {
-          transition: transform 2s cubic-bezier(0.55, 0, 0.1, 1) !important;
-        }
-
+        
+        .list-move { transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1) !important; z-index: 10; }
+        .list-enter-active, .list-leave-active { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important; }
+        .list-leave-active { position: absolute; width: 100%; z-index: 0; }
+        .list-enter-from { opacity: 0; transform: translateY(30px); }
+        .list-leave-to { opacity: 0; transform: translateY(-30px); }
+        
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         .dark ::-webkit-scrollbar-track { background: #1e293b; }
@@ -68,7 +49,6 @@
 </head>
 <body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans h-screen flex flex-col overflow-hidden transition-colors duration-300">
 
-    <!-- 初始資源載入遮罩 -->
     <div id="init-loading" class="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-[100] flex flex-col items-center justify-center">
         <div class="text-center">
             <svg class="animate-spin h-12 w-12 text-blue-600 mb-4 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -81,60 +61,47 @@
     </div>
 
     <div id="app" v-cloak class="flex-1 flex flex-col h-full">
-        
-        <!-- Header -->
         <header class="bg-white dark:bg-slate-900 shadow-sm border-b border-slate-200 dark:border-slate-800 z-20 transition-colors">
             <div class="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <div class="bg-blue-600 text-white p-2 rounded-lg shadow-lg shadow-blue-500/30">
-                        <i class="fa-solid fa-print text-xl"></i>
-                    </div>
+                    <div class="bg-blue-600 text-white p-2 rounded-lg shadow-lg shadow-blue-500/30"><i class="fa-solid fa-print text-xl"></i></div>
                     <div>
                         <div class="flex items-center gap-2">
                             <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
-                            <!-- Demo Badge -->
                             <span v-if="isDemoMode" class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse shadow-sm">DEMO MODE</span>
                         </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v3.5 (Demo Integrated)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v3.9 (New Tab Links)</p>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
-                    <button @click="toggleDarkMode" class="w-8 h-8 rounded-full bg-white dark:bg-slate-700 text-slate-600 dark:text-yellow-400 shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-600 transition-all mr-2">
-                        <i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
-                    </button>
+                    <button @click="toggleDarkMode" class="w-8 h-8 rounded-full bg-white dark:bg-slate-700 text-slate-600 dark:text-yellow-400 shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-600 transition-all mr-2"><i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i></button>
 
                     <div class="relative group">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fa-solid fa-server text-slate-400"></i>
-                        </div>
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><i class="fa-solid fa-server text-slate-400"></i></div>
                         <select v-model="currentServerId" @change="switchServer" :disabled="isDemoMode" class="pl-9 pr-8 py-1.5 text-sm rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 w-48 transition-colors appearance-none cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed">
                             <option value="" disabled>請選擇伺服器</option>
                             <option v-for="srv in servers" :key="srv.id" :value="srv.id">{{ srv.name }} ({{ srv.ip }})</option>
                         </select>
-                        <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
-                            <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
-                        </div>
+                        <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none"><i class="fa-solid fa-chevron-down text-xs text-slate-400"></i></div>
                     </div>
 
-                    <button @click="openServerManager" :disabled="isDemoMode" class="bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="管理伺服器列表">
-                        <i class="fa-solid fa-gear"></i>
-                    </button>
+                    <button @click="openServerManager" :disabled="isDemoMode" class="bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="管理伺服器列表"><i class="fa-solid fa-gear"></i></button>
 
-                    <button @click="fetchPrinters(true)" :disabled="loading || (!currentServerId && !isDemoMode)"
-                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-500/20 disabled:shadow-none">
-                        <i class="fa-solid fa-rotate" :class="{'fa-spin': loading}"></i>
-                        <span class="hidden sm:inline">連線</span>
+                    <button @click="fetchPrinters(true)" :disabled="loading || (!currentServerId && !isDemoMode)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-500/20 disabled:shadow-none">
+                        <i class="fa-solid fa-rotate" :class="{'fa-spin': loading}"></i><span class="hidden sm:inline">連線</span>
                     </button>
                     
                     <div class="flex items-center ml-2 border-l border-slate-300 dark:border-slate-600 pl-3 gap-2">
-                        <label class="inline-flex items-center cursor-pointer" title="開啟自動更新">
+                        <label class="inline-flex items-center cursor-pointer" title="開啟/關閉自動更新">
                             <input type="checkbox" v-model="autoRefresh" :disabled="(!isConfigValid && !isDemoMode)" class="sr-only peer">
                             <div class="relative w-9 h-5 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
                         </label>
                         <div v-if="autoRefresh" class="flex items-center transition-all animate-fade-in-right bg-white dark:bg-slate-700 rounded border border-slate-300 dark:border-slate-600 px-1">
-                            <input type="number" v-model.lazy="refreshInterval" @change="validateInterval" min="60" class="w-14 px-1 py-0.5 text-xs text-center bg-transparent border-none text-slate-700 dark:text-slate-200 focus:ring-0" title="更新間隔 (秒)">
+                            <input type="number" v-model.lazy="refreshInterval" @change="validateInterval" min="60" class="w-10 px-0.5 py-0.5 text-xs text-center bg-transparent border-none text-slate-700 dark:text-slate-200 focus:ring-0 appearance-none" title="更新間隔 (秒)">
                             <span class="text-[10px] text-slate-500 dark:text-slate-400 mr-1">s</span>
+                            <div class="w-[1px] h-3 bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                            <span class="text-xs font-mono font-bold text-blue-600 dark:text-blue-400 w-5 text-right">{{ countdown }}</span>
                         </div>
                         <span v-else class="text-xs font-medium text-gray-700 dark:text-slate-300" :class="{'opacity-50': !isConfigValid && !isDemoMode}">自動</span>
                     </div>
@@ -142,92 +109,57 @@
             </div>
         </header>
 
-        <!-- Content -->
         <main class="flex-1 overflow-hidden flex flex-col md:flex-row max-w-8xl mx-auto w-full">
-            
-            <!-- Sidebar -->
             <aside class="w-full md:w-64 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-4 overflow-y-auto flex-shrink-0 transition-colors">
                 <div class="mb-6">
                     <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">伺服器全域操作</h3>
                     <div class="space-y-2">
                         <button @click="restartSpooler" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
-                            <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-disabled:text-slate-400">重啟 Spooler</span>
-                                <i class="fa-solid fa-arrows-rotate text-slate-400 group-hover:text-blue-500 group-disabled:text-slate-300"></i>
-                            </div>
+                            <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-disabled:text-slate-400">重啟 Spooler</span><i class="fa-solid fa-arrows-rotate text-slate-400 group-hover:text-blue-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">強制重啟列印服務</p>
                         </button>
-                        
                         <button @click="selfHeal" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-red-300 dark:hover:border-red-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
-                            <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-red-600 dark:group-hover:text-red-400 group-disabled:text-slate-400">深度自癒修復</span>
-                                <i class="fa-solid fa-suitcase-medical text-slate-400 group-hover:text-red-500 group-disabled:text-slate-300"></i>
-                            </div>
+                            <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-red-600 dark:group-hover:text-red-400 group-disabled:text-slate-400">深度自癒修復</span><i class="fa-solid fa-suitcase-medical text-slate-400 group-hover:text-red-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">清空暫存並重置環境</p>
                         </button>
-
                          <button @click="restartScript" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
-                            <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-disabled:text-slate-400">重啟 API 服務</span>
-                                <i class="fa-solid fa-power-off text-slate-400 group-hover:text-purple-500 group-disabled:text-slate-300"></i>
-                            </div>
+                            <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-disabled:text-slate-400">重啟 API 服務</span><i class="fa-solid fa-power-off text-slate-400 group-hover:text-purple-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">重新載入 PowerShell 腳本</p>
                         </button>
-
                         <button @click="showLogs" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
-                            <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-disabled:text-slate-400">檢視系統日誌</span>
-                                <i class="fa-solid fa-file-lines text-slate-400 group-hover:text-emerald-500 group-disabled:text-slate-300"></i>
-                            </div>
+                            <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-disabled:text-slate-400">檢視系統日誌</span><i class="fa-solid fa-file-lines text-slate-400 group-hover:text-emerald-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">查看最近 500 行紀錄</p>
                         </button>
                     </div>
                 </div>
-
                 <div class="mb-6">
                     <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">狀態概覽</h3>
                     <div class="grid grid-cols-2 gap-2">
-                        <div class="bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 text-center transition-colors">
-                            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ printers.length }}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">監控總數</div>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 text-center transition-colors">
-                            <div class="text-2xl font-bold text-red-500 dark:text-red-400">{{ errorCount }}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">異常數量</div>
-                        </div>
+                        <div class="bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 text-center transition-colors"><div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ printers.length }}</div><div class="text-xs text-slate-500 dark:text-slate-400">監控總數</div></div>
+                        <div class="bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 text-center transition-colors"><div class="text-2xl font-bold text-red-500 dark:text-red-400">{{ errorCount }}</div><div class="text-xs text-slate-500 dark:text-slate-400">異常數量</div></div>
                     </div>
                 </div>
-
                 <div class="mb-6">
                     <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">相關檔案下載</h3>
                     <div class="space-y-2">
-                        <a v-for="file in downloadFiles" :key="file.url" :href="file.url" :download="!isDemoMode" @click.prevent="downloadDemo(file)" class="block w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group cursor-pointer">
-                            <div class="flex items-center">
-                                <i :class="file.icon" class="w-5 text-center mr-2"></i>
-                                <span class="text-slate-700 dark:text-slate-200 text-xs group-hover:text-blue-600 dark:group-hover:text-blue-400">{{ file.name }}</span>
-                                <i class="fa-solid fa-download ml-auto text-slate-300 group-hover:text-blue-500 text-xs"></i>
-                            </div>
+                        <!-- [修正] target="_blank" 確保新視窗開啟，不影響目前監控 -->
+                        <a v-for="file in downloadFiles" 
+                           :key="file.url" 
+                           :href="file.url" 
+                           target="_blank" 
+                           @click="checkDownload($event)"
+                           class="block w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group cursor-pointer">
+                            <div class="flex items-center"><i :class="file.icon" class="w-5 text-center mr-2"></i><span class="text-slate-700 dark:text-slate-200 text-xs group-hover:text-blue-600 dark:group-hover:text-blue-400">{{ file.name }}</span><i class="fa-solid fa-up-right-from-square ml-auto text-slate-300 group-hover:text-blue-500 text-[10px]"></i></div>
                         </a>
                     </div>
                 </div>
-                
-                <div class="text-xs text-slate-400 dark:text-slate-500 text-center mt-auto pb-4">
-                    最後更新: {{ lastUpdated || '尚未連線' }}
-                </div>
+                <div class="text-xs text-slate-400 dark:text-slate-500 text-center mt-auto pb-4">最後更新: {{ lastUpdated || '尚未連線' }}</div>
             </aside>
 
-            <!-- Right Content -->
             <section class="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 relative transition-colors">
-                
-                <!-- Filter & Sort -->
                 <div class="mb-6 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
                     <div class="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
-                        <div class="relative w-full sm:w-60">
-                            <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-search"></i></span>
-                            <input type="text" v-model="searchQuery" placeholder="搜尋名稱、IP、狀態..." 
-                                   class="w-full pl-10 pr-4 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors text-sm">
-                        </div>
-                        
+                        <div class="relative w-full sm:w-60"><span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-search"></i></span><input type="text" v-model="searchQuery" placeholder="搜尋名稱、IP、狀態..." class="w-full pl-10 pr-4 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors text-sm"></div>
                         <div class="relative w-full sm:w-48">
                             <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-location-dot"></i></span>
                             <select v-model="filterLocation" class="w-full pl-10 pr-8 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors appearance-none cursor-pointer text-sm">
@@ -236,27 +168,17 @@
                             </select>
                             <span class="absolute right-3 top-3 text-slate-400 pointer-events-none"><i class="fa-solid fa-chevron-down text-xs"></i></span>
                         </div>
-
                         <div class="flex items-center gap-1 w-full sm:w-auto">
                             <div class="relative flex-1 sm:w-40">
                                 <span class="absolute left-3 top-2.5 text-slate-400"><i class="fa-solid fa-arrow-down-short-wide"></i></span>
                                 <select v-model="sortBy" class="w-full pl-9 pr-8 py-2 rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors appearance-none cursor-pointer text-sm">
-                                    <option value="Name">名稱</option>
-                                    <option value="Status">狀態</option>
-                                    <option value="Jobs">佇列數</option>
-                                    <option value="IP">IP 位址</option>
-                                    <option value="Location">位置</option>
-                                    <option value="PortName">連接埠</option>
-                                    <option value="Driver">驅動程式</option>
+                                    <option value="Name">名稱</option><option value="Status">狀態</option><option value="Jobs">佇列數</option><option value="IP">IP 位址</option><option value="Location">位置</option><option value="PortName">連接埠</option><option value="Driver">驅動程式</option>
                                 </select>
                                 <span class="absolute right-3 top-3 text-slate-400 pointer-events-none"><i class="fa-solid fa-chevron-down text-xs"></i></span>
                             </div>
-                            <button @click="sortDesc = !sortDesc" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-sm" :title="sortDesc ? '降冪' : '升冪'">
-                                <i class="fa-solid" :class="sortDesc ? 'fa-arrow-down-z-a' : 'fa-arrow-up-a-z'"></i>
-                            </button>
+                            <button @click="sortDesc = !sortDesc" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-sm" :title="sortDesc ? '降冪' : '升冪'"><i class="fa-solid" :class="sortDesc ? 'fa-arrow-down-z-a' : 'fa-arrow-up-a-z'"></i></button>
                         </div>
                     </div>
-                    
                     <div class="flex gap-2 flex-wrap justify-start mt-2 xl:mt-0">
                          <button @click="filterStatus = ''" :class="filterStatus === '' ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 border-transparent' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'" class="px-3 py-1 text-xs rounded-full border transition-all shadow-sm">全部</button>
                          <button @click="filterStatus = 'Ready'" :class="filterStatus === 'Ready' ? 'bg-emerald-600 text-white border-transparent' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'" class="px-3 py-1 text-xs rounded-full border transition-all shadow-sm">就緒</button>
@@ -266,7 +188,6 @@
                     </div>
                 </div>
 
-                <!-- Printer Grid -->
                 <transition-group name="list" tag="div" v-if="filteredPrinters.length > 0" class="printer-grid-container grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4 pb-20">
                     <div v-for="p in filteredPrinters" :key="p.Name" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-all relative group h-full">
                         <div class="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl" :class="getStatusColor(p.Status, true)"></div>
@@ -275,12 +196,8 @@
                                 <div class="overflow-hidden">
                                     <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg truncate pr-2" :title="p.Name">{{ p.Name }}</h3>
                                     <div class="flex items-center gap-2 mt-1">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" :class="getStatusColor(p.Status)">
-                                            <i class="fa-solid fa-circle text-[8px] mr-1.5"></i>{{ p.Status }}
-                                        </span>
-                                        <span v-if="p.IP" class="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
-                                            <i class="fa-solid fa-network-wired mr-1"></i>{{ p.IP }}
-                                        </span>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" :class="getStatusColor(p.Status)"><i class="fa-solid fa-circle text-[8px] mr-1.5"></i>{{ p.Status }}</span>
+                                        <span v-if="p.IP" class="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded"><i class="fa-solid fa-network-wired mr-1"></i>{{ p.IP }}</span>
                                     </div>
                                 </div>
                                 <div class="text-right flex-shrink-0 ml-2">
@@ -288,9 +205,7 @@
                                     <div class="text-[10px] text-slate-400 dark:text-slate-500 uppercase">佇列數</div>
                                 </div>
                             </div>
-                            <div v-if="p.ErrorDetails" class="mb-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs px-2 py-1.5 rounded border border-red-100 dark:border-red-900/50 flex items-start gap-2">
-                                <i class="fa-solid fa-triangle-exclamation mt-0.5"></i><span>{{ p.ErrorDetails }}</span>
-                            </div>
+                            <div v-if="p.ErrorDetails" class="mb-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs px-2 py-1.5 rounded border border-red-100 dark:border-red-900/50 flex items-start gap-2"><i class="fa-solid fa-triangle-exclamation mt-0.5"></i><span>{{ p.ErrorDetails }}</span></div>
                             <div v-if="p.Comment" class="mb-3 text-xs text-slate-500 dark:text-slate-400 italic"><i class="fa-regular fa-comment-dots mr-1"></i>{{ p.Comment }}</div>
                             <div class="grid grid-cols-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400 mb-4 border-t border-slate-100 dark:border-slate-700 pt-2">
                                 <div v-if="p.Location" class="truncate" :title="p.Location"><i class="fa-solid fa-location-dot w-4"></i> {{ p.Location }}</div>
@@ -299,44 +214,24 @@
                                 <div v-if="p.PortName" class="truncate"><i class="fa-solid fa-plug w-4"></i> {{ p.PortName }}</div>
                             </div>
                             <div class="grid grid-cols-4 gap-2 mt-auto pt-2 border-t border-slate-100 dark:border-slate-700">
-                                <button @click="refreshPrinter(p.Name)" :disabled="loading" class="bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 text-xs py-2 rounded border border-slate-200 dark:border-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <i class="fa-solid fa-sync" :class="{'fa-spin': loading}"></i> 刷新
-                                </button>
-                                <button @click="openEditModal(p)" :disabled="loading" class="bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400 text-xs py-2 rounded border border-yellow-200 dark:border-yellow-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <i class="fa-solid fa-pen-to-square"></i> 編輯
-                                </button>
-                                <button v-if="p.Status === 'Ready'" @click="openPdfModal(p)" :disabled="loading" class="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-xs py-2 rounded border border-blue-200 dark:border-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <i class="fa-solid fa-file-pdf"></i> 列印
-                                </button>
+                                <button @click="refreshPrinter(p.Name)" :disabled="loading" class="bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 text-xs py-2 rounded border border-slate-200 dark:border-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-sync" :class="{'fa-spin': loading}"></i> 刷新</button>
+                                <button @click="openEditModal(p)" :disabled="loading" class="bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400 text-xs py-2 rounded border border-yellow-200 dark:border-yellow-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-pen-to-square"></i> 編輯</button>
+                                <button v-if="p.Status === 'Ready'" @click="openPdfModal(p)" :disabled="loading" class="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-xs py-2 rounded border border-blue-200 dark:border-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-file-pdf"></i> 列印</button>
                                 <div v-else class="flex-1"></div>
-                                <button @click="clearQueue(p.Name)" :disabled="loading" class="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-300 text-xs py-2 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <i class="fa-solid fa-trash"></i> 清除
-                                </button>
+                                <button @click="clearQueue(p.Name)" :disabled="loading" class="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-300 text-xs py-2 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-trash"></i> 清除</button>
                             </div>
                         </div>
                     </div>
                 </transition-group>
-                <div v-else-if="!loading" class="flex flex-col items-center justify-center h-96 text-slate-400 dark:text-slate-600">
-                    <i class="fa-solid fa-ghost text-4xl mb-4"></i>
-                    <p>找不到符合的印表機</p>
-                </div>
-                <div v-if="loading && printers.length === 0" class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-10">
-                    <div class="flex flex-col items-center">
-                        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-500 mb-3"></i>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">正在連線至 API...</p>
-                    </div>
-                </div>
+                <div v-else-if="!loading" class="flex flex-col items-center justify-center h-96 text-slate-400 dark:text-slate-600"><i class="fa-solid fa-ghost text-4xl mb-4"></i><p>找不到符合的印表機</p></div>
+                <div v-if="loading && printers.length === 0" class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-10"><div class="flex flex-col items-center"><i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-500 mb-3"></i><p class="text-sm text-slate-500 dark:text-slate-400 font-medium">正在連線至 API...</p></div></div>
             </section>
         </main>
 
-        <!-- Server Manager Modal -->
         <transition name="fade">
             <div v-if="showServerModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden transition-colors flex flex-col max-h-[90vh]">
-                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-                        <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-server mr-2 text-blue-500"></i>伺服器管理</h3>
-                        <button @click="showServerModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark text-xl"></i></button>
-                    </div>
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900"><h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-server mr-2 text-blue-500"></i>伺服器管理</h3><button @click="showServerModal = false" :disabled="loading" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"><i class="fa-solid fa-xmark text-xl"></i></button></div>
                     <div class="flex-1 overflow-y-auto p-6">
                         <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 mb-6">
                             <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{{ editingServer.id ? '編輯伺服器' : '新增伺服器' }}</h4>
@@ -344,24 +239,14 @@
                                 <div class="sm:col-span-3"><input type="text" v-model="editingServer.name" placeholder="名稱" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white"></div>
                                 <div class="sm:col-span-4"><input type="text" v-model="editingServer.ip" placeholder="IP 位址" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white"></div>
                                 <div class="sm:col-span-3"><input type="password" v-model="editingServer.key" placeholder="API Key" class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white"></div>
-                                <div class="sm:col-span-2 flex gap-1">
-                                    <button @click="saveServer" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"><i class="fa-solid fa-save"></i></button>
-                                    <button v-if="editingServer.id" @click="resetEdit" class="flex-1 bg-slate-400 hover:bg-slate-500 text-white rounded text-sm"><i class="fa-solid fa-rotate-left"></i></button>
-                                </div>
+                                <div class="sm:col-span-2 flex gap-1"><button @click="saveServer" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"><i class="fa-solid fa-save"></i></button><button v-if="editingServer.id" @click="resetEdit" class="flex-1 bg-slate-400 hover:bg-slate-500 text-white rounded text-sm"><i class="fa-solid fa-rotate-left"></i></button></div>
                             </div>
                         </div>
                         <div v-if="servers.length === 0" class="text-center py-8 text-slate-400"><i class="fa-solid fa-database text-3xl mb-2"></i><p>尚無伺服器設定，請新增。</p></div>
                         <div v-else class="space-y-2">
                             <div v-for="srv in servers" :key="srv.id" class="flex items-center justify-between p-3 bg-white dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600 rounded-lg hover:border-blue-300 dark:hover:border-blue-500 transition-colors group">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-2 h-2 rounded-full" :class="srv.id === currentServerId ? 'bg-emerald-500' : 'bg-slate-300'"></div>
-                                    <div><div class="font-bold text-slate-700 dark:text-slate-200 text-sm">{{ srv.name }}</div><div class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ srv.ip }}</div></div>
-                                </div>
-                                <div class="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                    <button @click="useServer(srv)" v-if="srv.id !== currentServerId" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded" title="切換使用"><i class="fa-solid fa-plug"></i></button>
-                                    <button @click="editServer(srv)" class="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded" title="編輯"><i class="fa-solid fa-pen"></i></button>
-                                    <button @click="removeServer(srv.id)" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="刪除"><i class="fa-solid fa-trash"></i></button>
-                                </div>
+                                <div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full" :class="srv.id === currentServerId ? 'bg-emerald-500' : 'bg-slate-300'"></div><div><div class="font-bold text-slate-700 dark:text-slate-200 text-sm">{{ srv.name }}</div><div class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ srv.ip }}</div></div></div>
+                                <div class="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"><button @click="useServer(srv)" v-if="srv.id !== currentServerId" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded" title="切換使用"><i class="fa-solid fa-plug"></i></button><button @click="editServer(srv)" class="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded" title="編輯"><i class="fa-solid fa-pen"></i></button><button @click="removeServer(srv.id)" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="刪除"><i class="fa-solid fa-trash"></i></button></div>
                             </div>
                         </div>
                     </div>
@@ -369,88 +254,61 @@
             </div>
         </transition>
 
-        <!-- Edit Modal -->
         <transition name="fade">
             <div v-if="showEditModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition-colors">
-                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-                        <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-pen-to-square mr-2 text-yellow-500"></i>編輯資訊</h3>
-                        <button @click="showEditModal = false" :disabled="saving" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900"><h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-pen-to-square mr-2 text-yellow-500"></i>編輯資訊</h3><button @click="showEditModal = false" :disabled="saving" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-xmark"></i></button></div>
                     <div class="p-6 space-y-4">
                         <div class="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-sm text-yellow-800 dark:text-yellow-200 mb-4 border border-yellow-100 dark:border-yellow-900/50"><span class="font-bold">目標：</span> {{ editTarget?.Name }}</div>
                         <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">位置</label><input type="text" v-model="editLocation" class="block w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-2 focus:ring-yellow-500"></div>
                         <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">備註</label><textarea v-model="editComment" rows="3" class="block w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-2 focus:ring-yellow-500"></textarea></div>
                     </div>
-                    <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
-                        <button @click="showEditModal = false" :disabled="saving" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium disabled:opacity-50">取消</button>
-                        <button @click="submitEdit" :disabled="saving" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"><i v-if="saving" class="fa-solid fa-spinner fa-spin"></i>{{ saving ? '儲存中...' : '儲存變更' }}</button>
-                    </div>
+                    <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800"><button @click="showEditModal = false" :disabled="saving" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">取消</button><button @click="submitEdit" :disabled="saving" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-yellow-500/20"><i v-if="saving" class="fa-solid fa-spinner fa-spin"></i>{{ saving ? '儲存中...' : '儲存變更' }}</button></div>
                 </div>
             </div>
         </transition>
 
-        <!-- PDF Modal -->
         <transition name="fade">
             <div v-if="showPdfModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition-colors">
-                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-                        <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-print mr-2 text-blue-600 dark:text-blue-400"></i>上傳 PDF 列印</h3>
-                        <button @click="showPdfModal = false" :disabled="uploading" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900"><h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-print mr-2 text-blue-600 dark:text-blue-400"></i>上傳 PDF 列印</h3><button @click="showPdfModal = false" :disabled="uploading" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-xmark"></i></button></div>
                     <div class="p-6 space-y-4">
                         <div class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200 mb-4"><span class="font-bold">目標：</span> {{ selectedPrinter?.Name }}</div>
                         <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">選擇檔案</label><input type="file" ref="fileInput" accept=".pdf" class="block w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/50 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800 transition-all border border-slate-200 dark:border-slate-600 rounded-lg cursor-pointer bg-white dark:bg-slate-700"></div>
-                        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">模式</label><div class="grid grid-cols-3 gap-2">
-                            <label class="cursor-pointer"><input type="radio" v-model="pdfDuplex" value="0" class="peer sr-only"><div class="text-center py-2 border dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-all text-sm text-slate-600 dark:text-slate-300">單面</div></label>
-                            <label class="cursor-pointer"><input type="radio" v-model="pdfDuplex" value="1" class="peer sr-only"><div class="text-center py-2 border dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-all text-sm text-slate-600 dark:text-slate-300">雙面(長)</div></label>
-                            <label class="cursor-pointer"><input type="radio" v-model="pdfDuplex" value="2" class="peer sr-only"><div class="text-center py-2 border dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-all text-sm text-slate-600 dark:text-slate-300">雙面(短)</div></label>
-                        </div></div>
+                        <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">模式</label><div class="grid grid-cols-3 gap-2"><label class="cursor-pointer"><input type="radio" v-model="pdfDuplex" value="0" class="peer sr-only"><div class="text-center py-2 border dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-all text-sm text-slate-600 dark:text-slate-300">單面</div></label><label class="cursor-pointer"><input type="radio" v-model="pdfDuplex" value="1" class="peer sr-only"><div class="text-center py-2 border dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-all text-sm text-slate-600 dark:text-slate-300">雙面(長)</div></label><label class="cursor-pointer"><input type="radio" v-model="pdfDuplex" value="2" class="peer sr-only"><div class="text-center py-2 border dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-all text-sm text-slate-600 dark:text-slate-300">雙面(短)</div></label></div></div>
                     </div>
                     <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
-                        <button @click="showPdfModal = false" :disabled="uploading" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium disabled:opacity-50">取消</button>
-                        <button @click="submitPdf" :disabled="uploading" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"><i v-if="uploading" class="fa-solid fa-spinner fa-spin"></i>{{ uploading ? '傳送中...' : '確認列印' }}</button>
+                        <button @click="showPdfModal = false" :disabled="uploading" class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">取消</button>
+                        <button @click="submitPdf" :disabled="uploading" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-500/20"><i v-if="uploading" class="fa-solid fa-spinner fa-spin"></i>{{ uploading ? '傳送中...' : '確認列印' }}</button>
                     </div>
                 </div>
             </div>
         </transition>
 
-        <!-- Log Modal -->
         <transition name="fade">
             <div v-if="showLogModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col transition-colors">
-                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-                        <h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-terminal mr-2 text-emerald-600"></i>伺服器日誌</h3>
-                        <div class="flex items-center gap-3">
-                            <button @click="fetchLogs" :disabled="logsLoading" class="text-sm text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"><i class="fa-solid fa-sync mr-1" :class="{'fa-spin': logsLoading}"></i>重新整理</button>
-                            <button @click="showLogModal = false" :disabled="logsLoading" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"><i class="fa-solid fa-xmark text-xl"></i></button>
-                        </div>
-                    </div>
-                    <div class="flex-1 overflow-auto bg-slate-900 p-4 font-mono text-xs text-green-400 leading-relaxed whitespace-pre-wrap" id="logContent">
-                        <div v-if="logsLoading" class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><br>載入中...</div>
-                        <div v-else>{{ logData || '暫無日誌資料...' }}</div>
-                    </div>
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900"><h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-terminal mr-2 text-emerald-600"></i>伺服器日誌</h3><div class="flex items-center gap-3"><button @click="fetchLogs" :disabled="logsLoading" class="text-sm text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"><i class="fa-solid fa-sync mr-1" :class="{'fa-spin': logsLoading}"></i>重新整理</button><button @click="showLogModal = false" :disabled="logsLoading" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"><i class="fa-solid fa-xmark text-xl"></i></button></div></div>
+                    <div class="flex-1 overflow-auto bg-slate-900 p-4 font-mono text-xs text-green-400 leading-relaxed whitespace-pre-wrap" id="logContent"><div v-if="logsLoading" class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><br>載入中...</div><div v-else>{{ logData || '暫無日誌資料...' }}</div></div>
                 </div>
             </div>
         </transition>
 
     </div>
 
-    <!-- Scripts -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script>
         const { createApp, ref, computed, onMounted, watch } = Vue;
 
         createApp({
             setup() {
-                // Core
                 const isDemoMode = ref(new URLSearchParams(window.location.search).get('demo') === '1');
                 const config = ref({ ip: '', key: '' });
                 const autoRefresh = ref(localStorage.getItem('ps_auto_refresh') === 'true');
                 const refreshInterval = ref(parseInt(localStorage.getItem('ps_refresh_interval')) || 60);
                 const darkMode = ref(localStorage.getItem('ps_dark_mode') === 'true');
+                const countdown = ref(0);
 
-                // Data
                 const printers = ref([]);
                 const loading = ref(false);
                 const lastUpdated = ref('');
@@ -462,7 +320,6 @@
                 const servers = ref([]);
                 const currentServerId = ref('');
                 
-                // Modals
                 const showServerModal = ref(false);
                 const editingServer = ref({ id: null, name: '', ip: '', key: '' });
                 const showEditModal = ref(false);
@@ -487,7 +344,6 @@
                 ];
                 let pollTimer = null;
 
-                // --- Demo Mock Data Generator ---
                 const generateMockData = () => {
                     const locations = ['1F 櫃台', '2F 會議室', '3F 研發部', '3F 測試區', '4F 財務部'];
                     const statuses = ['Ready', 'Printing', 'Offline', 'Error', 'Warning'];
@@ -496,14 +352,9 @@
                         const s = statuses[Math.floor(Math.random() * statuses.length)];
                         mocks.push({
                             Name: `Office-Printer-${String(i).padStart(2,'0')}`,
-                            Status: s,
-                            Jobs: s==='Printing' ? Math.floor(Math.random()*5)+1 : 0,
-                            IP: `192.168.1.${100+i}`,
-                            Location: locations[i%locations.length],
-                            Comment: `資產編號: A-${202300+i}`,
-                            Driver: 'HP Universal Printing PCL 6',
-                            PortName: `IP_192.168.1.${100+i}`,
-                            ShareName: `PRINTER_${i}`,
+                            Status: s, Jobs: s==='Printing' ? Math.floor(Math.random()*5)+1 : 0, IP: `192.168.1.${100+i}`,
+                            Location: locations[i%locations.length], Comment: `資產編號: A-${202300+i}`,
+                            Driver: 'HP Universal Printing PCL 6', PortName: `IP_192.168.1.${100+i}`, ShareName: `PRINTER_${i}`,
                             ErrorDetails: s==='Error' ? '缺紙 (Tray 2)' : (s==='Warning' ? '碳粉存量低' : '')
                         });
                     }
@@ -514,32 +365,43 @@
 
                 watch(currentServerId, (newId) => {
                     const srv = servers.value.find(s => s.id === newId);
-                    if (srv) { config.value.ip = srv.ip; config.value.key = srv.key; localStorage.setItem('ps_last_server_id', newId); fetchPrinters(true); }
+                    if (srv) { 
+                        config.value.ip = srv.ip; config.value.key = srv.key; 
+                        localStorage.setItem('ps_last_server_id', newId); 
+                        fetchPrinters(true); 
+                        if (autoRefresh.value) startPolling();
+                    }
                     else { config.value.ip = ''; config.value.key = ''; printers.value = []; }
                 });
-                watch(autoRefresh, (newVal) => { localStorage.setItem('ps_auto_refresh', newVal); if (newVal && isConfigValid.value) { startPolling(); toast(`自動更新: ${refreshInterval.value}s`); } else { stopPolling(); toast("自動更新已停用"); } });
+                watch(autoRefresh, (newVal) => { 
+                    localStorage.setItem('ps_auto_refresh', newVal); 
+                    if (newVal && isConfigValid.value) { startPolling(); toast(`已啟用自動更新 (${refreshInterval.value}s)`); } 
+                    else { stopPolling(); toast("自動更新已停用"); } 
+                });
                 watch(darkMode, (val) => { localStorage.setItem('ps_dark_mode', val); document.documentElement.classList.toggle('dark', val); }, { immediate: true });
 
                 const toggleDarkMode = () => darkMode.value = !darkMode.value;
                 const validateInterval = () => { if (refreshInterval.value < 60) refreshInterval.value = 60; localStorage.setItem('ps_refresh_interval', refreshInterval.value); if (autoRefresh.value) startPolling(); };
-                function startPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = setInterval(() => fetchPrinters(false), refreshInterval.value * 1000); }
+                
+                function startPolling() {
+                    if (pollTimer) clearInterval(pollTimer);
+                    countdown.value = refreshInterval.value;
+                    pollTimer = setInterval(() => {
+                        countdown.value--;
+                        if (countdown.value <= 0) { fetchPrinters(false); countdown.value = refreshInterval.value; }
+                    }, 1000);
+                }
                 function stopPolling() { if (pollTimer) clearInterval(pollTimer); }
+
                 const getApiUrl = (path) => `http://${config.value.ip}:8888${path}`;
 
                 const loadServers = () => {
-                    if (isDemoMode.value) {
-                        servers.value = [{ id: 999, name: 'DEMO Server', ip: '127.0.0.1', key: 'demo' }];
-                        currentServerId.value = 999;
-                        return;
-                    }
+                    if (isDemoMode.value) { servers.value = [{ id: 999, name: 'DEMO Server', ip: '127.0.0.1', key: 'demo' }]; currentServerId.value = 999; return; }
                     const stored = localStorage.getItem('ps_servers_list');
                     if (stored) servers.value = JSON.parse(stored);
                     else {
                         const oldIp = localStorage.getItem('ps_server_ip');
-                        if (oldIp) {
-                            const newSrv = { id: Date.now(), name: '預設伺服器', ip: oldIp, key: localStorage.getItem('ps_api_key')||'' };
-                            servers.value = [newSrv]; saveServers(); currentServerId.value = newSrv.id;
-                        }
+                        if (oldIp) { const newSrv = { id: Date.now(), name: '預設伺服器', ip: oldIp, key: localStorage.getItem('ps_api_key')||'' }; servers.value = [newSrv]; saveServers(); currentServerId.value = newSrv.id; }
                     }
                     const lastId = localStorage.getItem('ps_last_server_id');
                     if (lastId && servers.value.find(s => s.id == lastId)) currentServerId.value = parseInt(lastId);
@@ -560,9 +422,8 @@
                 const useServer = (srv) => { currentServerId.value = srv.id; showServerModal.value = false; fetchPrinters(true); };
                 const switchServer = () => { if (currentServerId.value) fetchPrinters(true); };
 
-                // Fetch Logic (Mixed Real & Demo)
                 const fetchSinglePrinter = async (name) => {
-                    if (isDemoMode.value) return; // Demo skips single refresh
+                    if (isDemoMode.value) return; 
                     try {
                         const res = await axios.get(getApiUrl(`/printer/status?name=${encodeURIComponent(name)}`), { headers: { 'X-API-KEY': config.value.key } });
                         if (res.data.success) {
@@ -576,17 +437,16 @@
                 const fetchPrinters = async (showToast = false) => {
                     if (!isConfigValid.value) { if (showToast) error("請選擇伺服器"); return; }
                     loading.value = true;
+                    if (autoRefresh.value) countdown.value = refreshInterval.value;
                     
                     if (isDemoMode.value) {
                         setTimeout(() => {
                             if (printers.value.length === 0) printers.value = generateMockData();
                             else {
-                                // Randomly update some demo data
                                 printers.value.forEach(p => {
                                     if (Math.random() > 0.7) {
                                         const s = ['Ready', 'Printing', 'Offline'][Math.floor(Math.random()*3)];
-                                        p.Status = s;
-                                        p.Jobs = s==='Printing' ? Math.floor(Math.random()*10) : 0;
+                                        p.Status = s; p.Jobs = s==='Printing' ? Math.floor(Math.random()*10) : 0;
                                     }
                                 });
                             }
@@ -597,7 +457,6 @@
                         }, 800);
                         return;
                     }
-
                     try {
                         const res = await axios.get(getApiUrl('/printers'), { headers: { 'X-API-KEY': config.value.key } });
                         if (res.data.success) {
@@ -609,6 +468,13 @@
                     finally { 
                         loading.value = false;
                         const l = document.getElementById('init-loading'); if(l) { l.classList.add('fade-out'); setTimeout(()=>l.remove(),500); }
+                    }
+                };
+
+                const checkDownload = (e) => {
+                    if (isDemoMode.value) {
+                        e.preventDefault();
+                        toast("Demo 模式無法下載檔案", "#f59e0b");
                     }
                 };
 
@@ -634,7 +500,6 @@
                     } catch (err) { error("失敗: " + err.message); } finally { loading.value = false; }
                 };
 
-                // Wrapper Functions
                 const clearQueue = (name) => { if(confirm("清除佇列？")) performAction(`/printer/clear?name=${encodeURIComponent(name)}`, "佇列已清除", name); };
                 const refreshPrinter = (name) => performAction(`/printer/refresh?name=${encodeURIComponent(name)}`, "指令已發送", name);
                 const restartSpooler = () => { if(confirm("重啟 Spooler？")) performAction(`/service/restart-spooler`, "服務重啟中"); };
@@ -743,12 +608,12 @@
 
                 return {
                     config, servers, currentServerId, showServerModal, editingServer, printers, loading, lastUpdated, autoRefresh, darkMode, isConfigValid, isDemoMode,
-                    searchQuery, filterStatus, filterLocation, uniqueLocations, filteredPrinters, errorCount, sortBy, sortDesc, refreshInterval, validateInterval,
+                    searchQuery, filterStatus, filterLocation, uniqueLocations, filteredPrinters, errorCount, sortBy, sortDesc, refreshInterval, validateInterval, countdown,
                     getStatusColor, toggleDarkMode, openServerManager, saveServer, removeServer, useServer, resetEdit, editServer, switchServer,
                     fetchPrinters, fetchSinglePrinter, clearQueue, refreshPrinter, restartSpooler, selfHeal, restartScript, 
                     showEditModal, editTarget, editLocation, editComment, saving, openEditModal, submitEdit, 
                     showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput, openPdfModal, submitPdf,
-                    showLogModal, logData, logsLoading, showLogs, fetchLogs, downloadFiles
+                    showLogModal, logData, logsLoading, showLogs, fetchLogs, downloadFiles, checkDownload
                 };
             }
         }).mount('#app');
