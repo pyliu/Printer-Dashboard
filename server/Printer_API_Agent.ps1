@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
     資深系統整合工程師實作版本 - Print Server HTTP API & Proactive Monitor
-    版本：v16.9 (Admin Notification Flag Update)
+    版本：v17.0 (System Restart API)
     修正：
-    1. 新增 $enableAdminNotifications 設定 (預設 False)：控制是否發送自動巡檢的告警通知。
-    2. Test-PrinterHealth 邏輯更新：若旗標為 False，僅記錄日誌不發送外部通知。
-    3. 維持 v16.8 的所有功能：API 路由修復、CORS、PDF 上傳、自癒功能。
+    1. 新增 /server/restart-computer 接口：允許透過 API 觸發作業系統重啟 (Shutdown /r)。
+    2. 實作安全關機流程：發送回應後等待 5 秒再執行重啟，確保客戶端收到成功訊息。
+    3. 維持 v16.9 的所有功能：通知開關、Cron 排程、PDF 上傳、自癒、日誌清理。
     4. 完全相容 PowerShell 2.0 (Windows Server 2008 SP2) 至 2019。
 .NOTES
-    ?? 測試指令
-    curl -H "X-API-KEY: %API_KEY%" http://%SERVER_IP%:8888/printers
+    ?? 重啟電腦測試指令
+    curl -H "X-API-KEY: %API_KEY%" http://%SERVER_IP%:8888/server/restart-computer
 #>
 
 # -------------------------------------------------------------------------
@@ -23,7 +23,7 @@ $maxLogSizeBytes    = 10MB
 $maxHistory         = 5                          
 $logRetentionDays   = 7                   
 
-# --- PDF 閱讀器路徑清單 ---
+# --- PDF 閱讀器路徑 ---
 $pdfReaderPaths     = @(
     "C:\Program Files (x86)\Foxit Software\Foxit PDF Reader\FoxitPDFReader.exe",
     "C:\Program Files\Foxit Software\Foxit PDF Reader\FoxitPDFReader.exe",
@@ -38,12 +38,12 @@ $notifyEndpoint     = "/api/notification_json_api.php"
 $notifyUrl          = "http://$notifyIp$notifyEndpoint"
 $notifyChannels     = @("HA10013859")
 
-# [新增] Admin 通知開關 (控制: 維護摘要、異常/恢復訊息)
-$enableAdminNotifications = $false    # 預設不發送自動告警，僅記錄 Log
-
 # [設定] 通知伺服器健康檢查
 $enableNotifyHealthCheck = $true      # 開關：是否在啟動時檢查伺服器存活
 $notifyTimeoutMs         = 1000       # 逾時：啟動偵測的 Ping 等待時間
+
+# [設定] Admin 通知開關
+$enableAdminNotifications = $false    
 
 # --- 監控時段與頻率 ---
 $checkIntervalSec   = 60                  
@@ -60,7 +60,7 @@ $maxStuckPrinters   = 3
 
 # --- 排程深度自癒設定 (Cron) ---
 $enableScheduledHeal = $true
-$scheduledHealCron   = "30 7 * * *"       # 每天早上 07:30 執行
+$scheduledHealCron   = "30 7 * * *"       
 
 # --- 佇列監控設定 ---
 $queueThreshold     = 20                  
@@ -83,6 +83,8 @@ $global:IsFirstRun          = $true
 $global:ValidPdfReader      = $null
 $global:LastCronRunTime     = $null 
 $global:IsNotifyServerOnline = $true 
+$restartScript = $false
+$restartComputer = $false
 
 # -------------------------------------------------------------------------
 # 2. 核心函數庫
@@ -165,17 +167,8 @@ function Cleanup-OldLogs {
 function Send-SysAdminNotify {
     param([Parameter(Mandatory=$true)][string]$content, [string]$title = "印表機系統通知")
     
-    # --- 檢查頻道是否為空 ---
-    if ($null -eq $notifyChannels -or $notifyChannels.Count -eq 0) {
-        Write-ApiLog ">>> [通知取消] 頻道列表為空，已略過發送。"
-        return
-    }
-
-    # --- 檢查全域旗標 ---
-    if ($enableNotifyHealthCheck -and (-not $global:IsNotifyServerOnline)) {
-        Write-ApiLog ">>> [通知取消] 啟動時偵測到伺服器離線，本週期暫停發送。"
-        return
-    }
+    if ($null -eq $notifyChannels -or $notifyChannels.Count -eq 0) { return }
+    if ($enableNotifyHealthCheck -and (-not $global:IsNotifyServerOnline)) { return }
 
     try {
         $localIp = "127.0.0.1"
@@ -307,14 +300,8 @@ function Get-PrinterStatusData {
             $finalStatus = "Offline" 
         } else {
             switch ($p.PrinterStatus) {
-                1 { 
-                    $finalStatus = "Error"
-                    $errDetails = "未知 - 可能原因: 驅動限制/SNMP受阻/特殊硬體狀態"
-                }
-                2 { 
-                    $finalStatus = "Error"
-                    $errDetails = "其他 - 請檢查設備面板"
-                }
+                1 { $finalStatus = "Error"; $errDetails = "未知 - 可能原因: 驅動限制/SNMP受阻/特殊硬體狀態" }
+                2 { $finalStatus = "Error"; $errDetails = "其他 - 請檢查設備面板" }
                 4 { $finalStatus = "Printing" }
                 5 { $finalStatus = "Warmup" }
                 default { 
@@ -408,13 +395,11 @@ function Test-PrinterHealth {
     if ($enableAutoHeal -and $stuckPrinters -ge $maxStuckPrinters) { Invoke-SpoolerSelfHealing -reason "多台印表機同時堵塞"; return }
     if ($global:IsFirstRun) { $global:IsFirstRun = $false; return }
     
-    # --- [修正] 檢查 Admin 通知開關 ---
     if ($batchAlerts.Count -gt 0) {
         if ($enableAdminNotifications) {
-            Send-SysAdminNotify -content ([string]::Join("`n", $batchAlerts)) -title "印表機維護摘要" 
+            Send-SysAdminNotify -content ([string]::Join("`n", $batchAlerts)) -title "印表機異常告警" 
         } else {
-            Write-ApiLog ">>> [監控] 偵測到 $( $batchAlerts.Count ) 筆狀態變更，但 Admin 通知已停用 (EnableAdminNotifications = false)。"
-            # 仍將內容寫入日誌以便查核
+            Write-ApiLog ">>> [監控] 偵測到 $( $batchAlerts.Count ) 筆狀態變更，但 Admin 通知已停用。"
             foreach ($alert in $batchAlerts) { Write-ApiLog "    |-- $alert" }
         }
     }
@@ -455,7 +440,7 @@ if ($enableNotifyHealthCheck) {
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://*:$port/")
-try { $listener.Start(); Write-ApiLog "--- 伺服器 v16.9 上線 (Admin 通知旗標已啟用: $enableAdminNotifications) ---" } catch { exit }
+try { $listener.Start(); Write-ApiLog "--- 伺服器 v17.0 上線 (新增重啟電腦 API) ---" } catch { exit }
 
 $nextCheck = Get-Date; $nextHeart = Get-Date; $contextTask = $null
 
@@ -523,6 +508,14 @@ while ($listener.IsListening) {
                 $res.message = "API 伺服器正在重新啟動中..."
                 Write-ApiLog ">>> [系統操作] 收到重啟指令 (Restart Script)"
                 $restartScript = $true
+            }
+            elseif ($path -eq "/server/restart-computer") {
+                # --- [新增] 重啟電腦接口 ---
+                $res.success = $true
+                $res.message = "伺服器將在 5 秒後重新啟動..."
+                Write-ApiLog ">>> [系統操作] 收到重啟電腦指令 (Restart Computer)"
+                Send-SysAdminNotify -content "API：收到管理員指令，伺服器即將在 5 秒後重新啟動。" -title "系統操作"
+                $restartComputer = $true
             }
             elseif ($path -eq "/printer/update") {
                 $pName = Get-Utf8QueryParam $request "name"
@@ -672,6 +665,15 @@ while ($listener.IsListening) {
             try { $listener.Stop(); $listener.Close() } catch {}
             $myself = $MyInvocation.MyCommand.Definition
             Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$myself`"" -WindowStyle Hidden
+            exit
+        }
+
+        # --- [執行重啟電腦] ---
+        if ($restartComputer) {
+            Write-ApiLog ">>> [系統重啟] 正在停止監聽並執行 Shutdown..."
+            try { $listener.Stop(); $listener.Close() } catch {}
+            # 延遲 5 秒後重啟
+            Start-Process "shutdown.exe" -ArgumentList "/r /t 5 /f /d p:4:1"
             exit
         }
 
