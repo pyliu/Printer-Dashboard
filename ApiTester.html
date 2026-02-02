@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Server API 診斷工具</title>
+    
+    <!-- [離線模式] 載入本地整合後的資源 -->
+    <link rel="stylesheet" href="offline/bundle.css">
+    <script src="offline/tailwind.js"></script>
+    <script src="offline/bundle.js"></script>
+
+    <style>
+        [v-cloak] { display: none; }
+        .console-line { font-family: 'Consolas', 'Monaco', monospace; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 h-screen flex flex-col font-sans">
+
+    <div id="app" v-cloak class="flex flex-col h-full">
+        
+        <!-- 頂部設定列 -->
+        <header class="bg-white border-b border-gray-200 p-4 shadow-sm z-10">
+            <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="bg-purple-600 text-white p-2 rounded"><i class="fa-solid fa-stethoscope"></i></div>
+                    <h1 class="text-xl font-bold tracking-tight">API 診斷工具</h1>
+                </div>
+
+                <div class="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-200">
+                    <input type="text" v-model="config.ip" placeholder="Server IP" class="p-2 text-sm border rounded w-32 focus:ring-2 focus:ring-purple-500 outline-none">
+                    <input type="text" v-model="config.port" placeholder="Port" class="p-2 text-sm border rounded w-16 focus:ring-2 focus:ring-purple-500 outline-none">
+                    <input type="password" v-model="config.key" placeholder="API Key" class="p-2 text-sm border rounded w-32 focus:ring-2 focus:ring-purple-500 outline-none">
+                    <button @click="initConnection" :disabled="loading" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors disabled:opacity-50">
+                        <i v-if="loading" class="fa-solid fa-spinner fa-spin mr-1"></i> 連線並取得列表
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主內容 -->
+        <main class="flex-1 overflow-hidden flex flex-col md:flex-row max-w-7xl mx-auto w-full p-4 gap-4">
+            
+            <!-- 左側：控制與印表機選擇 -->
+            <aside class="w-full md:w-1/3 flex flex-col gap-4">
+                
+                <!-- 1. 目標選擇 -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                    <h2 class="font-bold text-gray-700 mb-3 border-b pb-2"><i class="fa-solid fa-bullseye text-red-500 mr-2"></i>測試目標</h2>
+                    
+                    <div v-if="printers.length === 0" class="text-center text-gray-400 py-4">
+                        請先連線以取得印表機列表
+                    </div>
+                    <div v-else>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">選擇測試用的印表機</label>
+                        <select v-model="selectedPrinter" class="w-full p-2 border rounded mb-2 bg-gray-50 text-sm">
+                            <option v-for="p in printers" :value="p">{{ p.Name }} ({{ p.Status }})</option>
+                        </select>
+                        <div v-if="selectedPrinter" class="text-xs text-gray-500 space-y-1 bg-gray-50 p-2 rounded">
+                            <p>IP: {{ selectedPrinter.IP }}</p>
+                            <p>Driver: {{ selectedPrinter.Driver }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 測試項目列表 -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex-1 overflow-y-auto">
+                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                        <h2 class="font-bold text-gray-700"><i class="fa-solid fa-list-check text-blue-500 mr-2"></i>測試項目</h2>
+                        <button v-if="printers.length > 0" @click="runAllTests" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200">
+                            <i class="fa-solid fa-play mr-1"></i>全部執行
+                        </button>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div v-for="(test, index) in testCases" :key="index" 
+                             class="flex items-center justify-between p-3 rounded border transition-all"
+                             :class="getTestClass(test.status)">
+                            
+                            <div class="flex items-center gap-3">
+                                <div class="w-6 text-center">
+                                    <i v-if="test.status === 'idle'" class="fa-regular fa-circle text-gray-300"></i>
+                                    <i v-if="test.status === 'running'" class="fa-solid fa-spinner fa-spin text-blue-500"></i>
+                                    <i v-if="test.status === 'success'" class="fa-solid fa-check-circle text-green-500"></i>
+                                    <i v-if="test.status === 'error'" class="fa-solid fa-circle-xmark text-red-500"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold">{{ test.name }}</div>
+                                    <div class="text-xs opacity-70 font-mono">{{ test.endpoint }}</div>
+                                </div>
+                            </div>
+                            
+                            <button @click="runSingleTest(index)" :disabled="loading || (test.requirePrinter && !selectedPrinter)" 
+                                    class="text-gray-400 hover:text-blue-600 disabled:opacity-30">
+                                <i class="fa-solid fa-play"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 右側：控制台日誌 -->
+            <section class="w-full md:w-2/3 bg-gray-900 rounded-lg shadow-lg flex flex-col overflow-hidden">
+                <div class="bg-gray-800 p-3 flex justify-between items-center border-b border-gray-700">
+                    <span class="text-gray-300 text-sm font-mono"><i class="fa-solid fa-terminal mr-2"></i>Console Output</span>
+                    <button @click="clearLog" class="text-xs text-gray-500 hover:text-gray-300"><i class="fa-solid fa-trash"></i> Clear</button>
+                </div>
+                <div id="console-box" class="flex-1 overflow-y-auto p-4 space-y-1 font-mono text-xs">
+                    <div v-for="(log, i) in logs" :key="i" :class="log.type">
+                        <span class="opacity-50 mr-2">[{{ log.time }}]</span>
+                        <span v-html="log.msg"></span>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, nextTick, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // 設定
+                const config = reactive({
+                    ip: localStorage.getItem('tester_ip') || '127.0.0.1',
+                    port: localStorage.getItem('tester_port') || '8888',
+                    key: localStorage.getItem('tester_key') || ''
+                });
+
+                const loading = ref(false);
+                const printers = ref([]);
+                const selectedPrinter = ref(null);
+                const logs = ref([]);
+
+                // 測試案例定義
+                const testCases = ref([
+                    { name: '取得印表機列表', endpoint: '/printers', method: 'GET', requirePrinter: false, status: 'idle' },
+                    { name: '查詢單一狀態', endpoint: '/printer/status', method: 'GET', requirePrinter: true, status: 'idle' },
+                    { name: '重新整理 (Refresh)', endpoint: '/printer/refresh', method: 'GET', requirePrinter: true, status: 'idle' },
+                    { name: '清除佇列 (Clear)', endpoint: '/printer/clear', method: 'GET', requirePrinter: true, status: 'idle' },
+                    { name: '更新備註 (Update)', endpoint: '/printer/update', method: 'GET', requirePrinter: true, params: { location: 'API_TEST_LOC', comment: 'API_TEST_COM' }, status: 'idle' },
+                    { name: '讀取伺服器日誌', endpoint: '/server/logs', method: 'GET', requirePrinter: false, params: { lines: 10 }, status: 'idle' },
+                    { name: '自癒功能測試', endpoint: '/service/self-heal', method: 'GET', requirePrinter: false, status: 'idle' },
+                    { name: '重啟 Spooler', endpoint: '/service/restart-spooler', method: 'GET', requirePrinter: false, status: 'idle' }
+                    // 危險操作預設不加入自動測試，需手動防呆
+                ]);
+
+                // 儲存設定
+                const saveConfig = () => {
+                    localStorage.setItem('tester_ip', config.ip);
+                    localStorage.setItem('tester_port', config.port);
+                    localStorage.setItem('tester_key', config.key);
+                };
+
+                // 日誌功能
+                const addLog = (msg, type = 'text-gray-300') => {
+                    const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+                    logs.value.push({ time, msg, type });
+                    nextTick(() => {
+                        const box = document.getElementById('console-box');
+                        if (box) box.scrollTop = box.scrollHeight;
+                    });
+                };
+                const clearLog = () => logs.value = [];
+
+                // 取得 API URL
+                const getUrl = (path) => `http://${config.ip}:${config.port}${path}`;
+
+                // 1. 初始化連線
+                const initConnection = async () => {
+                    saveConfig();
+                    if(!config.ip || !config.key) return alert("請輸入 IP 與 API Key");
+                    
+                    loading.value = true;
+                    addLog(`Connecting to ${getUrl('/printers')}...`, 'text-blue-400');
+                    
+                    try {
+                        const res = await axios.get(getUrl('/printers'), { headers: { 'X-API-KEY': config.key } });
+                        addLog(`Response: ${JSON.stringify(res.data, null, 2)}`, 'text-green-400');
+                        
+                        if(res.data.success) {
+                            printers.value = res.data.data;
+                            if(printers.value.length > 0) {
+                                selectedPrinter.value = printers.value[0];
+                                addLog(`已載入 ${printers.value.length} 台印表機，預設選取: ${selectedPrinter.value.Name}`, 'text-yellow-400');
+                                // 更新第一個測試項目的狀態
+                                testCases.value[0].status = 'success';
+                            } else {
+                                addLog("警告: 伺服器回傳空列表", 'text-orange-400');
+                            }
+                        } else {
+                            addLog(`API Error: ${res.data.message}`, 'text-red-400');
+                            testCases.value[0].status = 'error';
+                        }
+                    } catch (err) {
+                        addLog(`Connection Failed: ${err.message}`, 'text-red-500 bg-red-900/20 p-1');
+                        testCases.value[0].status = 'error';
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                // 2. 執行單一測試
+                const runSingleTest = async (index) => {
+                    const test = testCases.value[index];
+                    test.status = 'running';
+                    
+                    let url = getUrl(test.endpoint);
+                    let params = test.params || {};
+
+                    // 若需要印表機名稱，自動附加
+                    if (test.requirePrinter) {
+                        if (!selectedPrinter.value) {
+                            addLog(`Skipping ${test.name}: No printer selected`, 'text-gray-500');
+                            test.status = 'idle';
+                            return;
+                        }
+                        // 附加 name 參數
+                        // 注意: 這裡使用 params 讓 axios 處理 query string
+                        params['name'] = selectedPrinter.value.Name;
+                    }
+
+                    addLog(`> [${test.method}] ${test.endpoint} ${JSON.stringify(params)}`, 'text-cyan-300');
+
+                    try {
+                        const res = await axios({
+                            method: test.method,
+                            url: url,
+                            headers: { 'X-API-KEY': config.key },
+                            params: params // GET query parameters
+                        });
+
+                        const isSuccess = res.data && res.data.success;
+                        const color = isSuccess ? 'text-green-300' : 'text-red-300';
+                        
+                        addLog(`< ${res.status} ${res.statusText}`, isSuccess ? 'text-green-500' : 'text-red-500');
+                        addLog(JSON.stringify(res.data, null, 2), color);
+
+                        test.status = isSuccess ? 'success' : 'error';
+                    } catch (err) {
+                        addLog(`Request Error: ${err.message}`, 'text-red-500');
+                        if (err.response) {
+                            addLog(`Response Data: ${JSON.stringify(err.response.data)}`, 'text-red-400');
+                        }
+                        test.status = 'error';
+                    }
+                };
+
+                // 3. 執行所有測試 (循序)
+                const runAllTests = async () => {
+                    if (!selectedPrinter.value) return alert("請先選擇一台測試用的印表機");
+                    if (!confirm("確定要對所選印表機執行一系列測試嗎？(包含清除佇列、更新備註)")) return;
+
+                    addLog("--- 開始全自動測試 ---", 'text-white border-t border-gray-600 pt-2 mt-2');
+                    
+                    for (let i = 0; i < testCases.value.length; i++) {
+                        // 跳過第一項 (列表已經抓過了)
+                        if (i === 0) continue; 
+                        
+                        await runSingleTest(i);
+                        // 簡單延遲 500ms 讓 Log 好讀一點
+                        await new Promise(r => setTimeout(r, 500)); 
+                    }
+                    
+                    addLog("--- 測試結束 ---", 'text-white border-b border-gray-600 pb-2 mb-2');
+                };
+
+                const getTestClass = (status) => {
+                    switch(status) {
+                        case 'success': return 'bg-green-50 border-green-200';
+                        case 'error': return 'bg-red-50 border-red-200';
+                        case 'running': return 'bg-blue-50 border-blue-200 animate-pulse';
+                        default: return 'bg-white hover:bg-gray-50';
+                    }
+                };
+
+                return {
+                    config, loading, printers, selectedPrinter, logs, testCases,
+                    initConnection, runSingleTest, runAllTests, clearLog, getTestClass
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
