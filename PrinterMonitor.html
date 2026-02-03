@@ -5,22 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>印表機伺服器監控中心</title>
     
-    <!-- [離線模式] 載入本地整合後的資源 -->
     <link rel="stylesheet" href="offline/bundle.css">
     <script src="offline/tailwind.js"></script>
     <script src="offline/bundle.js"></script>
 
-    <!-- Tailwind 設定 -->
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        slate: {
-                            850: '#1e293b',
-                            950: '#0f172a'
-                        }
+                        slate: { 850: '#1e293b', 950: '#0f172a' }
                     }
                 }
             }
@@ -33,7 +28,6 @@
         #init-loading { transition: opacity 0.5s ease-out; }
         .fade-out { opacity: 0; pointer-events: none; }
         
-        /* 列表過渡動畫 (1s) */
         .list-move { transition: transform 1.0s cubic-bezier(0.4, 0, 0.2, 1) !important; z-index: 10; }
         .list-enter-active, .list-leave-active { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important; }
         .list-leave-active { position: absolute; width: 100%; z-index: 0; }
@@ -73,7 +67,7 @@
                             <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
                             <span v-if="isDemoMode" class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse shadow-sm">DEMO MODE</span>
                         </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v3.98 (Sort Bugfix)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v4.0 (Advanced Ops)</p>
                     </div>
                 </div>
 
@@ -117,26 +111,43 @@
                 <div class="mb-6">
                     <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">伺服器全域操作</h3>
                     <div class="space-y-2">
+                        <!-- 一般操作 -->
                         <button @click="restartSpooler" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-disabled:text-slate-400">重啟 Spooler</span><i class="fa-solid fa-arrows-rotate text-slate-400 group-hover:text-blue-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">強制重啟列印服務</p>
                         </button>
+                        
                         <button @click="selfHeal" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-red-300 dark:hover:border-red-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-red-600 dark:group-hover:text-red-400 group-disabled:text-slate-400">深度自癒修復</span><i class="fa-solid fa-suitcase-medical text-slate-400 group-hover:text-red-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">清空暫存並重置環境</p>
                         </button>
-                         <button @click="restartScript" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
-                            <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-disabled:text-slate-400">重啟 API 服務</span><i class="fa-solid fa-power-off text-slate-400 group-hover:text-purple-500 group-disabled:text-slate-300"></i></div>
-                            <p class="text-xs text-slate-400 mt-1">重新載入 PowerShell 腳本</p>
-                        </button>
-                        <button @click="restartServer" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg shadow-sm hover:shadow-md hover:border-red-400 dark:hover:border-red-600 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none mt-4">
-                            <div class="flex items-center justify-between"><span class="font-medium text-red-700 dark:text-red-400 group-hover:text-red-800 dark:group-hover:text-red-300 group-disabled:text-slate-400">重啟伺服器</span><i class="fa-solid fa-display text-red-400 group-hover:text-red-600 group-disabled:text-slate-300"></i></div>
-                            <p class="text-xs text-red-500/80 dark:text-red-400/60 mt-1 group-disabled:text-slate-400">⚠️ 強制重啟整台主機</p>
-                        </button>
+
                         <button @click="showLogs" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-disabled:text-slate-400">檢視系統日誌</span><i class="fa-solid fa-file-lines text-slate-400 group-hover:text-emerald-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">查看最近 500 行紀錄</p>
                         </button>
+
+                        <!-- [新增] 進階操作切換開關 -->
+                        <button @click="showAdvancedOps = !showAdvancedOps" class="w-full py-2 text-xs text-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border border-dashed border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all mt-4 mb-2 flex items-center justify-center gap-2">
+                            <i class="fa-solid" :class="showAdvancedOps ? 'fa-angle-up' : 'fa-angle-down'"></i>
+                            {{ showAdvancedOps ? '隱藏高風險操作' : '顯示進階系統操作' }}
+                        </button>
+
+                        <!-- [新增] 危險操作區塊 (預設隱藏) -->
+                        <transition name="fade">
+                            <div v-if="showAdvancedOps" class="space-y-2 p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <div class="text-[10px] text-slate-400 text-center mb-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i>請謹慎操作</div>
+                                
+                                <button @click="restartScript" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded shadow-sm hover:border-purple-400 dark:hover:border-purple-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <div class="flex items-center justify-between"><span class="font-medium text-sm text-slate-700 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400">重啟 API 服務</span><i class="fa-solid fa-power-off text-slate-400 group-hover:text-purple-500 text-xs"></i></div>
+                                </button>
+                                
+                                <button @click="restartServer" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-3 py-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded shadow-sm hover:border-red-400 dark:hover:border-red-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <div class="flex items-center justify-between"><span class="font-medium text-sm text-red-700 dark:text-red-400 group-hover:text-red-800 dark:group-hover:text-red-300">重啟伺服器</span><i class="fa-solid fa-display text-red-400 group-hover:text-red-600 text-xs"></i></div>
+                                </button>
+                            </div>
+                        </transition>
+
                     </div>
                 </div>
                 <div class="mb-6">
@@ -153,6 +164,7 @@
                            :key="file.url" 
                            :href="file.url" 
                            target="_blank" 
+                           @click="handleDownload($event)"
                            class="block w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group cursor-pointer">
                             <div class="flex items-center"><i :class="file.icon" class="w-5 text-center mr-2"></i><span class="text-slate-700 dark:text-slate-200 text-xs group-hover:text-blue-600 dark:group-hover:text-blue-400">{{ file.name }}</span><i class="fa-solid fa-up-right-from-square ml-auto text-slate-300 group-hover:text-blue-500 text-[10px]"></i></div>
                         </a>
@@ -268,7 +280,7 @@
         <transition name="fade">
             <div v-if="showEditModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition-colors">
-                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900"><h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-pen-to-square mr-2 text-yellow-500"></i>編輯印表機資訊</h3><button @click="showEditModal = false" :disabled="saving" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-xmark"></i></button></div>
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900"><h3 class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-pen-to-square mr-2 text-yellow-500"></i>編輯資訊</h3><button @click="showEditModal = false" :disabled="saving" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-xmark"></i></button></div>
                     <div class="p-6 space-y-4">
                         <div class="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-sm text-yellow-800 dark:text-yellow-200 mb-4 border border-yellow-100 dark:border-yellow-900/50"><span class="font-bold">目標：</span> {{ editTarget?.Name }}</div>
                         <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">位置</label><input type="text" v-model="editLocation" class="block w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-2 focus:ring-yellow-500"></div>
@@ -319,6 +331,8 @@
                 const refreshInterval = ref(parseInt(localStorage.getItem('ps_refresh_interval')) || 60);
                 const darkMode = ref(localStorage.getItem('ps_dark_mode') === 'true');
                 const countdown = ref(0);
+                // [NEW] Toggle for advanced operations
+                const showAdvancedOps = ref(false);
 
                 const printers = ref([]);
                 const loading = ref(false);
@@ -515,6 +529,8 @@
                 const refreshPrinter = (name) => performAction(`/printer/refresh?name=${encodeURIComponent(name)}`, "指令已發送", name);
                 const restartSpooler = () => { if(confirm("重啟 Spooler？")) performAction(`/service/restart-spooler`, "服務重啟中"); };
                 const selfHeal = () => { if(confirm("執行深度自癒？")) performAction(`/service/self-heal`, "自癒流程啟動"); };
+                
+                // Advanced Ops Wrappers
                 const restartScript = () => { 
                     if(confirm("重啟 API？")) {
                         if(isDemoMode.value) return toast("Demo 模式無法重啟", "#f59e0b");
@@ -622,7 +638,7 @@
                              const iA=valA.split('.').map(Number), iB=valB.split('.').map(Number);
                              if(iA.length===4 && iB.length===4) for(let i=0;i<4;i++) if(iA[i]!==iB[i]) return sortDesc.value ? iB[i]-iA[i] : iA[i]-iB[i];
                         }
-                        if(sortBy.value==='Jobs') return sortDesc.value ? valB-valA : valA-valB;
+                        if(sortBy.value==='Jobs') return sortDesc.value ? valB-valA : vA-vB;
                         return sortDesc.value ? (valA<valB?1:-1) : (valA>valB?1:-1);
                     });
                 });
@@ -654,7 +670,8 @@
                     showEditModal, editTarget, editLocation, editComment, saving, openEditModal, submitEdit, 
                     showPdfModal, selectedPrinter, pdfDuplex, uploading, fileInput, openPdfModal, submitPdf,
                     showLogModal, logData, logsLoading, showLogs, fetchLogs, downloadFiles, handleDownload,
-                    uniqueLocations, filteredPrinters, errorCount, getStatusColor
+                    uniqueLocations, filteredPrinters, errorCount, getStatusColor,
+                    showAdvancedOps // [NEW] for advanced ops toggle
                 };
             }
         }).mount('#app');
