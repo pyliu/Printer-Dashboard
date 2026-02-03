@@ -24,7 +24,7 @@
             <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                 <div class="flex items-center gap-2">
                     <div class="bg-purple-600 text-white p-2 rounded"><i class="fa-solid fa-stethoscope"></i></div>
-                    <h1 class="text-xl font-bold tracking-tight">API 診斷工具</h1>
+                    <h1 class="text-xl font-bold tracking-tight">API 診斷工具 v1.2</h1>
                 </div>
 
                 <div class="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-200">
@@ -59,6 +59,7 @@
                         <div v-if="selectedPrinter" class="text-xs text-gray-500 space-y-1 bg-gray-50 p-2 rounded">
                             <p>IP: {{ selectedPrinter.IP }}</p>
                             <p>Driver: {{ selectedPrinter.Driver }}</p>
+                            <p>LastUpdated: {{ selectedPrinter.LastUpdated }}</p>
                         </div>
                     </div>
                 </div>
@@ -133,17 +134,17 @@
                 const selectedPrinter = ref(null);
                 const logs = ref([]);
 
-                // 測試案例定義
+                // 測試案例定義 (新增重啟電腦與更新資訊)
                 const testCases = ref([
                     { name: '取得印表機列表', endpoint: '/printers', method: 'GET', requirePrinter: false, status: 'idle' },
                     { name: '查詢單一狀態', endpoint: '/printer/status', method: 'GET', requirePrinter: true, status: 'idle' },
                     { name: '重新整理 (Refresh)', endpoint: '/printer/refresh', method: 'GET', requirePrinter: true, status: 'idle' },
                     { name: '清除佇列 (Clear)', endpoint: '/printer/clear', method: 'GET', requirePrinter: true, status: 'idle' },
-                    { name: '更新備註 (Update)', endpoint: '/printer/update', method: 'GET', requirePrinter: true, params: { location: 'API_TEST_LOC', comment: 'API_TEST_COM' }, status: 'idle' },
+                    { name: '更新資訊 (Meta)', endpoint: '/printer/update', method: 'GET', requirePrinter: true, params: { location: 'Test_Loc', comment: 'Test_Comment' }, status: 'idle' },
                     { name: '讀取伺服器日誌', endpoint: '/server/logs', method: 'GET', requirePrinter: false, params: { lines: 10 }, status: 'idle' },
                     { name: '自癒功能測試', endpoint: '/service/self-heal', method: 'GET', requirePrinter: false, status: 'idle' },
-                    { name: '重啟 Spooler', endpoint: '/service/restart-spooler', method: 'GET', requirePrinter: false, status: 'idle' }
-                    // 危險操作預設不加入自動測試，需手動防呆
+                    { name: '重啟 Spooler', endpoint: '/service/restart-spooler', method: 'GET', requirePrinter: false, status: 'idle' },
+                    { name: '重啟電腦 (Restart OS)', endpoint: '/server/restart-computer', method: 'GET', requirePrinter: false, status: 'idle' }
                 ]);
 
                 // 儲存設定
@@ -184,7 +185,6 @@
                             if(printers.value.length > 0) {
                                 selectedPrinter.value = printers.value[0];
                                 addLog(`已載入 ${printers.value.length} 台印表機，預設選取: ${selectedPrinter.value.Name}`, 'text-yellow-400');
-                                // 更新第一個測試項目的狀態
                                 testCases.value[0].status = 'success';
                             } else {
                                 addLog("警告: 伺服器回傳空列表", 'text-orange-400');
@@ -204,6 +204,12 @@
                 // 2. 執行單一測試
                 const runSingleTest = async (index) => {
                     const test = testCases.value[index];
+                    
+                    // 防呆：如果是重啟電腦，先確認
+                    if (test.endpoint === '/server/restart-computer') {
+                        if (!confirm("警告：這將會立即重啟遠端伺服器！確定要執行嗎？")) return;
+                    }
+
                     test.status = 'running';
                     
                     let url = getUrl(test.endpoint);
@@ -216,8 +222,6 @@
                             test.status = 'idle';
                             return;
                         }
-                        // 附加 name 參數
-                        // 注意: 這裡使用 params 讓 axios 處理 query string
                         params['name'] = selectedPrinter.value.Name;
                     }
 
@@ -228,7 +232,7 @@
                             method: test.method,
                             url: url,
                             headers: { 'X-API-KEY': config.key },
-                            params: params // GET query parameters
+                            params: params
                         });
 
                         const isSuccess = res.data && res.data.success;
@@ -250,16 +254,16 @@
                 // 3. 執行所有測試 (循序)
                 const runAllTests = async () => {
                     if (!selectedPrinter.value) return alert("請先選擇一台測試用的印表機");
-                    if (!confirm("確定要對所選印表機執行一系列測試嗎？(包含清除佇列、更新備註)")) return;
+                    if (!confirm("確定要對所選印表機執行一系列測試嗎？(危險操作如重啟電腦將被跳過)")) return;
 
                     addLog("--- 開始全自動測試 ---", 'text-white border-t border-gray-600 pt-2 mt-2');
                     
                     for (let i = 0; i < testCases.value.length; i++) {
-                        // 跳過第一項 (列表已經抓過了)
-                        if (i === 0) continue; 
+                        const test = testCases.value[i];
+                        if (i === 0) continue; // Skip list fetch
+                        if (test.endpoint.includes('restart')) continue; // Skip destructive restarts in batch mode
                         
                         await runSingleTest(i);
-                        // 簡單延遲 500ms 讓 Log 好讀一點
                         await new Promise(r => setTimeout(r, 500)); 
                     }
                     

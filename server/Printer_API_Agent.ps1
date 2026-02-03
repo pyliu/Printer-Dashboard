@@ -1,49 +1,18 @@
 <#
 .SYNOPSIS
     資深系統整合工程師實作版本 - Print Server HTTP API & Proactive Monitor
-    版本：v17.8 (RawUrl Parsing & Debug Logging)
+    版本：v17.9 (Data Timestamp Update)
     修正：
-    1. 解決中文亂碼問題：改用 RawUrl 解析參數，避開 .NET 舊版 Uri 類別自動錯誤解碼的問題。
-    2. 增加詳細 API 除錯日誌：明確記錄接收到的參數與解碼結果。
-    3. 維持 v17.x 所有功能：TCP 偵測、防火牆自動開通、重啟保護、CORS、自癒。
+    1. 新增 API 回傳欄位 "LastUpdated"：在每一筆印表機資料中加入伺服器端的產生時間戳記。
+    2. 維持 v17.8 的所有功能：RawUrl 解析、Zero-Ping、防火牆自動開通、重啟保護、CORS、自癒。
 
 .DESCRIPTION
     本腳本具備多層次自我檢查與自動修復機制 (Self-Healing & Resilience)：
-
-    1. [列印作業自癒] 清除殭屍作業
-       - 觸發機制：每次巡檢 (每分鐘執行一次)
-       - 判斷條件：作業狀態為 Error (錯誤) 或 Deleting (刪除中但卡住)
-       - 執行動作：自動呼叫 WMI Delete() 刪除該作業，防止單一壞檔卡住整台印表機佇列
-
-    2. [列印服務自癒] 偵測堵塞並重啟服務 (被動修復)
-       - 觸發機制：佇列監控
-       - 判斷條件：
-         (1) 單台印表機佇列數超過 $queueThreshold (預設 20)
-         (2) 且該數量與上次檢查時相同 (代表完全沒有消化)
-         (3) 且發生堵塞的印表機數量超過 $maxStuckPrinters (預設 3)
-       - 執行動作：
-         (1) 停止 Spooler 服務
-         (2) 強制清空 C:\Windows\System32\spool\PRINTERS 下所有暫存檔 (.SPL, .SHD)
-         (3) 重新啟動 Spooler 服務
-         (4) 發送通知給管理員
-
-    3. [系統健康維護] 排程環境重置 (主動預防)
-       - 觸發機制：Cron 排程表達式 ($scheduledHealCron，預設 "30 7 * * *" 即每天 07:30)
-       - 執行動作：執行完整的服務重啟與暫存檔清理
-       - 目的：預防 Windows Spooler 長期運作可能產生的記憶體洩漏 (Memory Leak) 或暫存檔碎片化導致的不穩定
-
-    4. [腳本自身韌性] (Script Resilience)
-       - 啟動重試：若 Port 8888 被佔用 (通常發生在剛重啟腳本時 Port 尚未釋放)，會自動重試 5 次，每次間隔 2 秒
-       - 防火牆自動開通：腳本啟動時會自動檢查並嘗試加入 TCP 8888 入站規則，防止因防火牆設定遺失導致無法連線
-       - 通知防卡死：發送 HTTP 通知前先偵測通知伺服器 TCP Port，若離線則直接跳過，避免 Script 卡在 WebRequest Timeout
-       - 錯誤隔離：API 處理與主監控迴圈皆有 Try-Catch 包覆，確保單一錯誤不會導致整個監控服務崩潰
-
-    5. [資安合規與 SOC 友善設計 (Zero-Ping)]
-       - 目的：避免頻繁的 ICMP 請求被防火牆或 SOC (資安維運中心) 誤判為內網掃描 (Ping Sweep) 攻擊
-       - 實作方式：本腳本已移除所有 ICMP Echo Request (Ping) 操作
-       - 印表機偵測：改為建立 TCP 連線至 Port 9100 (標準 RAW 列印埠)，這能更精確確認「列印服務」是否就緒，而非僅確認主機存活
-       - 通知伺服器偵測：改為建立 TCP 連線至 Port 80 (HTTP)，確認 Web 服務是否存活
-       - 效益：這些連線在防火牆日誌中會被視為正常的應用層業務流量，而非惡意的網路探測行為
+    1. [列印作業自癒] 清除殭屍作業 (狀態 Error/Deleting)
+    2. [列印服務自癒] 偵測堵塞 ($queueThreshold) 並重啟 Spooler
+    3. [系統健康維護] 排程環境重置 (Cron: $scheduledHealCron)
+    4. [腳本韌性] 啟動重試、防火牆開通、通知防卡死 (TCP Check)
+    5. [資安合規] Zero-Ping (使用 TCP 9100/80 偵測)
 
 .NOTES
     ?? 測試指令
@@ -243,7 +212,6 @@ function Test-CronMatch {
     if ([string]::IsNullOrEmpty($cron)) { return $false }
     $parts = $cron.Split(" "); if ($parts.Count -ne 5) { return $false }
     $min=$parts[0]; $hour=$parts[1]; $dom=$parts[2]; $month=$parts[3]; $dow=$parts[4]
-    
     function Check($p, $v) {
         if ($p -eq "*") { return $true }
         if ($p -match "^(\*|\d+)/(\d+)$") { return ($v % [int]$matches[2]) -eq 0 }
@@ -253,26 +221,15 @@ function Test-CronMatch {
     return (Check $min $now.Minute) -and (Check $hour $now.Hour) -and (Check $dom $now.Day) -and (Check $month $now.Month) -and (Check $dow [int]$now.DayOfWeek)
 }
 
-function Get-Utf8QueryParam {
-    param($request, $key)
-    $rawUrl = $request.RawUrl
-    # 匹配 key=value 直到下一個 & 或結束
-    if ($rawUrl -match "[?&]$key=([^&]*)") {
-        $encodedVal = $matches[1]
-        # 將 + 轉回 %20 (HttpListener 的 RawUrl 可能保留 +)
-        $encodedVal = $encodedVal.Replace("+", "%20")
-        try {
-            return [System.Uri]::UnescapeDataString($encodedVal)
-        } catch {
-            return $null
-        }
-    }
-    return $null
-}
+function Get-Utf8QueryParam { param($r, $k); if ($r.Url.Query -match "[?&]$k=([^&]*)") { return [System.Uri]::UnescapeDataString($matches[1]) }; return $null }
 
 function Get-PrinterStatusData {
     $results = New-Object System.Collections.Generic.List[Object]
     $portMap = @{}
+    
+    # [新增] 取得目前伺服器時間
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
     try { $tcpPorts = Get-WmiObject -Class Win32_TCPIPPrinterPort -ErrorAction SilentlyContinue; if($tcpPorts){ foreach($t in $tcpPorts){ if($t.Name){$portMap[$t.Name]=$t.HostAddress} } } } catch {}
     $wmiPrinters = Get-WmiObject -Class Win32_Printer
 
@@ -316,6 +273,7 @@ function Get-PrinterStatusData {
         $obj | Add-Member NoteProperty PortName $p.PortName
         $obj | Add-Member NoteProperty ShareName ($p.ShareName -as [string])
         $obj | Add-Member NoteProperty ErrorDetails $errDetails 
+        $obj | Add-Member NoteProperty LastUpdated $timestamp # [新增] 加入時間戳
         $results.Add($obj)
     }
     return $results
@@ -362,7 +320,7 @@ function Test-PrinterHealth {
 # 3. 主程序 (HttpListener)
 # -------------------------------------------------------------------------
 Write-ApiLog "----------------------------------------" -Color Cyan
-Write-ApiLog " Print Server API & Monitor v17.8 " -Color Cyan
+Write-ApiLog " Print Server API & Monitor v17.9 " -Color Cyan
 Write-ApiLog "----------------------------------------" -Color Cyan
 
 # A. 防火牆設定

@@ -67,7 +67,7 @@
                             <h1 class="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Print Server Monitor</h1>
                             <span v-if="isDemoMode" class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse shadow-sm">DEMO MODE</span>
                         </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v4.0 (Advanced Ops)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">系統維運儀表板 v4.1 (Sync Timestamp)</p>
                     </div>
                 </div>
 
@@ -111,37 +111,31 @@
                 <div class="mb-6">
                     <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">伺服器全域操作</h3>
                     <div class="space-y-2">
-                        <!-- 一般操作 -->
                         <button @click="restartSpooler" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-disabled:text-slate-400">重啟 Spooler</span><i class="fa-solid fa-arrows-rotate text-slate-400 group-hover:text-blue-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">強制重啟列印服務</p>
                         </button>
-                        
                         <button @click="selfHeal" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-red-300 dark:hover:border-red-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-red-600 dark:group-hover:text-red-400 group-disabled:text-slate-400">深度自癒修復</span><i class="fa-solid fa-suitcase-medical text-slate-400 group-hover:text-red-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">清空暫存並重置環境</p>
                         </button>
-
                         <button @click="showLogs" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                             <div class="flex items-center justify-between"><span class="font-medium text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-disabled:text-slate-400">檢視系統日誌</span><i class="fa-solid fa-file-lines text-slate-400 group-hover:text-emerald-500 group-disabled:text-slate-300"></i></div>
                             <p class="text-xs text-slate-400 mt-1">查看最近 500 行紀錄</p>
                         </button>
 
-                        <!-- [新增] 進階操作切換開關 -->
+                        <!-- 進階操作區塊 -->
                         <button @click="showAdvancedOps = !showAdvancedOps" class="w-full py-2 text-xs text-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border border-dashed border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all mt-4 mb-2 flex items-center justify-center gap-2">
                             <i class="fa-solid" :class="showAdvancedOps ? 'fa-angle-up' : 'fa-angle-down'"></i>
                             {{ showAdvancedOps ? '隱藏高風險操作' : '顯示進階系統操作' }}
                         </button>
 
-                        <!-- [新增] 危險操作區塊 (預設隱藏) -->
                         <transition name="fade">
                             <div v-if="showAdvancedOps" class="space-y-2 p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                                 <div class="text-[10px] text-slate-400 text-center mb-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i>請謹慎操作</div>
-                                
                                 <button @click="restartScript" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded shadow-sm hover:border-purple-400 dark:hover:border-purple-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed">
                                     <div class="flex items-center justify-between"><span class="font-medium text-sm text-slate-700 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400">重啟 API 服務</span><i class="fa-solid fa-power-off text-slate-400 group-hover:text-purple-500 text-xs"></i></div>
                                 </button>
-                                
                                 <button @click="restartServer" :disabled="loading || (!isConfigValid && !isDemoMode)" class="w-full text-left px-3 py-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded shadow-sm hover:border-red-400 dark:hover:border-red-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed">
                                     <div class="flex items-center justify-between"><span class="font-medium text-sm text-red-700 dark:text-red-400 group-hover:text-red-800 dark:group-hover:text-red-300">重啟伺服器</span><i class="fa-solid fa-display text-red-400 group-hover:text-red-600 text-xs"></i></div>
                                 </button>
@@ -160,12 +154,7 @@
                 <div class="mb-6">
                     <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">相關檔案下載</h3>
                     <div class="space-y-2">
-                        <a v-for="file in downloadFiles" 
-                           :key="file.url" 
-                           :href="file.url" 
-                           target="_blank" 
-                           @click="handleDownload($event)"
-                           class="block w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group cursor-pointer">
+                        <a v-for="file in downloadFiles" :key="file.url" :href="file.url" target="_blank" @click="handleDownload($event)" class="block w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all group cursor-pointer">
                             <div class="flex items-center"><i :class="file.icon" class="w-5 text-center mr-2"></i><span class="text-slate-700 dark:text-slate-200 text-xs group-hover:text-blue-600 dark:group-hover:text-blue-400">{{ file.name }}</span><i class="fa-solid fa-up-right-from-square ml-auto text-slate-300 group-hover:text-blue-500 text-[10px]"></i></div>
                         </a>
                     </div>
@@ -331,7 +320,6 @@
                 const refreshInterval = ref(parseInt(localStorage.getItem('ps_refresh_interval')) || 60);
                 const darkMode = ref(localStorage.getItem('ps_dark_mode') === 'true');
                 const countdown = ref(0);
-                // [NEW] Toggle for advanced operations
                 const showAdvancedOps = ref(false);
 
                 const printers = ref([]);
@@ -340,7 +328,7 @@
                 const searchQuery = ref('');
                 const filterStatus = ref('');
                 const filterLocation = ref('');
-                const sortBy = ref('IP');
+                const sortBy = ref('IP'); // Default sort by IP
                 const sortDesc = ref(false);
                 const servers = ref([]);
                 const currentServerId = ref('');
@@ -380,7 +368,8 @@
                             Status: s, Jobs: s==='Printing' ? Math.floor(Math.random()*5)+1 : 0, IP: `192.168.1.${100+i}`,
                             Location: locations[i%locations.length], Comment: `資產編號: A-${202300+i}`,
                             Driver: 'HP Universal Printing PCL 6', PortName: `IP_192.168.1.${100+i}`, ShareName: `PRINTER_${i}`,
-                            ErrorDetails: s==='Error' ? '缺紙 (Tray 2)' : (s==='Warning' ? '碳粉存量低' : '')
+                            ErrorDetails: s==='Error' ? '缺紙 (Tray 2)' : (s==='Warning' ? '碳粉存量低' : ''),
+                            LastUpdated: new Date().toLocaleString()
                         });
                     }
                     return mocks;
@@ -454,7 +443,7 @@
                         if (res.data.success) {
                             const idx = printers.value.findIndex(p => p.Name === name);
                             if (idx !== -1) printers.value[idx] = res.data.data;
-                            lastUpdated.value = new Date().toLocaleString();
+                            if (res.data.data.LastUpdated) lastUpdated.value = res.data.data.LastUpdated;
                         }
                     } catch (e) { console.error(e); }
                 };
@@ -486,7 +475,7 @@
                         const res = await axios.get(getApiUrl('/printers'), { headers: { 'X-API-KEY': config.value.key } });
                         if (res.data.success) {
                             printers.value = res.data.data;
-                            lastUpdated.value = new Date().toLocaleString();
+                            if (printers.value.length > 0 && printers.value[0].LastUpdated) lastUpdated.value = printers.value[0].LastUpdated;
                             if (showToast) success("連線成功");
                         } else { error(res.data.message); }
                     } catch (err) { error("連線失敗"); autoRefresh.value = false; }
@@ -529,8 +518,6 @@
                 const refreshPrinter = (name) => performAction(`/printer/refresh?name=${encodeURIComponent(name)}`, "指令已發送", name);
                 const restartSpooler = () => { if(confirm("重啟 Spooler？")) performAction(`/service/restart-spooler`, "服務重啟中"); };
                 const selfHeal = () => { if(confirm("執行深度自癒？")) performAction(`/service/self-heal`, "自癒流程啟動"); };
-                
-                // Advanced Ops Wrappers
                 const restartScript = () => { 
                     if(confirm("重啟 API？")) {
                         if(isDemoMode.value) return toast("Demo 模式無法重啟", "#f59e0b");
@@ -618,7 +605,7 @@
                         return matchQ && matchS && matchL;
                     }).sort((a,b) => {
                         let valA = a[sortBy.value]||'', valB = b[sortBy.value]||'';
-                        // [Fix] Status Priority Sorting
+                        // Status Priority Sorting
                         if (sortBy.value === 'Status') {
                              const getWeight = (s) => {
                                  s = s.toLowerCase();
@@ -638,7 +625,7 @@
                              const iA=valA.split('.').map(Number), iB=valB.split('.').map(Number);
                              if(iA.length===4 && iB.length===4) for(let i=0;i<4;i++) if(iA[i]!==iB[i]) return sortDesc.value ? iB[i]-iA[i] : iA[i]-iB[i];
                         }
-                        if(sortBy.value==='Jobs') return sortDesc.value ? valB-valA : vA-vB;
+                        if(sortBy.value==='Jobs') return sortDesc.value ? valB-valA : valA-valB;
                         return sortDesc.value ? (valA<valB?1:-1) : (valA>valB?1:-1);
                     });
                 });
